@@ -124,6 +124,20 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
   });
 
+  test('a shared link restores the metric, view and selection', async () => {
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+    await page.send('Page.navigate', { url: `${base}?shared=1#map=14/46.948/7.44&m=foreign&v=3d&sel=2600100,1199600&sc=radius&r=5` });
+    assert.ok(await page.waitFor(`!document.getElementById('loading') && !document.getElementById('detail').hidden`, 90_000));
+    const ev = page.ev;
+    assert.equal(await ev(`document.getElementById('metric').value`), 'foreign');
+    assert.equal(await ev(`document.querySelector('[data-view][aria-checked="true"]').dataset.view`), '3d');
+    assert.equal(await ev(`document.getElementById('d-title').textContent`), 'Within 5 km');
+    await ev(`(() => { const s = document.getElementById('metric'); s.value = 'senior'; s.dispatchEvent(new Event('change')); })()`);
+    assert.match(await ev(`location.hash`), /m=senior/);
+    await ev(`document.getElementById('d-close').click()`);
+    assert.doesNotMatch(await ev(`location.hash`), /sel=/);
+  });
+
   test('phone: folded panel, collapsed credits, details as a sheet', async () => {
     await page.ev(`localStorage.removeItem('spg-settings')`).catch(() => {});
     await load(375, 812, true);

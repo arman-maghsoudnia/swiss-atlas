@@ -89,11 +89,13 @@ const DEFAULTS = {
   smooth: false, sigma: 300, analysisScale: 1000, exaggeration: 1.5,
   ant: { show: true, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
 };
+const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'sc', 'r']; // see writeHash()
 const saved = loadSettings();
 const state = {
   ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ...(saved.ant || {}) },
   isolate: null, selected: -1, antenna: -1, hoverBlock: null, beforeId: undefined,
 };
+stateFromHash();
 if (!BASEMAPS[state.basemap]) state.basemap = DEFAULTS.basemap;
 if (!SIGMAS.includes(state.sigma)) state.sigma = DEFAULTS.sigma;
 if (!ANT.COLOR_MODES[state.ant.color]) state.ant.color = 'single';
@@ -107,6 +109,60 @@ function saveSettings() {
   const keep = ['metric', 'rawCol', 'rawMode', 'minPop', 'excludeNoloc', 'view', 'heightScale', 'opacity', 'dim', 'basemap',
     'scope', 'radiusKm', 'smooth', 'sigma', 'analysisScale', 'ant', 'exaggeration'];
   try { localStorage.setItem('spg-settings', JSON.stringify(Object.fromEntries(keep.map((k) => [k, state[k]])))); } catch { /* private mode */ }
+  writeHash();
+}
+
+// Shareable links: next to MapLibre's map=zoom/lat/lon, the URL hash carries what the map shows
+// (defaults left out). A link with any of these opens exactly that view, overriding saved settings;
+// a plain map= link keeps the visitor's own. sel= is the selected hectare (LV95 south-west corner).
+function hashParams() {
+  return Object.fromEntries(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
+    const k = p.indexOf('=');
+    return k < 0 ? [p, ''] : [p.slice(0, k), decodeURIComponent(p.slice(k + 1))];
+  }));
+}
+function stateFromHash() {
+  const h = hashParams();
+  if (!HASH_KEYS.some((k) => k in h)) return;
+  Object.assign(state, { ...DEFAULTS, ant: { ...DEFAULTS.ant, color: state.ant.color, sizeByPower: state.ant.sizeByPower },
+    heightScale: state.heightScale, opacity: state.opacity, dim: state.dim, analysisScale: state.analysisScale, exaggeration: state.exaggeration });
+  if (h.m) state.metric = h.m; // validated once the controls are built
+  if (h.a) state.rawCol = h.a;
+  if (h.as === 'count') state.rawMode = 'count';
+  if (h.mp) state.minPop = Math.min(100, Math.max(1, Math.round(+h.mp) || DEFAULTS.minPop));
+  if (h.x === '1') state.excludeNoloc = true;
+  if (h.v) state.view = h.v;
+  if (h.s) { state.smooth = true; state.sigma = +h.s; }
+  if (h.b) state.basemap = h.b;
+  if (h.an === '0') state.ant.show = false;
+  if (/^[01]{5}$/.test(h.op ?? '')) state.ant.ops = [...h.op].map((c) => c === '1');
+  if (ANT.TECH[h.t]) state.ant.tech = h.t;
+  if (ANT.TYPE_GROUPS[h.ty]) state.ant.type = h.ty;
+  if (['radius', 'view'].includes(h.sc)) state.scope = h.sc;
+  if ([0.5, 1, 2, 5, 10, 20].includes(+h.r)) state.radiusKm = +h.r;
+}
+function writeHash() {
+  const keep = location.hash.slice(1).split('&').filter((p) => p && !HASH_KEYS.includes(p.split('=')[0]));
+  const add = [], a = state.ant, d = DEFAULTS;
+  if (state.metric !== d.metric) add.push(`m=${state.metric}`);
+  if (state.metric === 'raw') { add.push(`a=${state.rawCol}`); if (state.rawMode === 'count') add.push('as=count'); }
+  if (state.minPop !== d.minPop) add.push(`mp=${state.minPop}`);
+  if (state.excludeNoloc) add.push('x=1');
+  if (state.view !== d.view) add.push(`v=${state.view}`);
+  if (state.smooth) add.push(`s=${state.sigma}`);
+  if (state.basemap !== d.basemap) add.push(`b=${state.basemap}`);
+  if (!a.show) add.push('an=0');
+  const ops = a.ops.map((o) => (o ? 1 : 0)).join('');
+  if (ops !== d.ant.ops.map((o) => (o ? 1 : 0)).join('')) add.push(`op=${ops}`);
+  if (a.tech) add.push(`t=${a.tech}`);
+  if (a.type) add.push(`ty=${a.type}`);
+  if (state.selected >= 0 && N && !$('detail').hidden) {
+    add.push(`sel=${cellE(state.selected)},${cellN(state.selected)}`);
+    if (state.scope !== 'cell') add.push(`sc=${state.scope}`);
+    if (state.scope === 'radius') add.push(`r=${state.radiusKm}`);
+  }
+  const next = `#${[...keep, ...add].join('&')}`;
+  if (next !== (location.hash || '#')) history.replaceState(history.state, '', next);
 }
 
 // ---------------------------------------------------------------- data
@@ -974,6 +1030,7 @@ function selectCell(i) {
   state.antenna = -1;
   if (state.scope === 'view') state.scope = 'cell';
   openDetail();
+  writeHash();
 }
 function selectAntenna(i) {
   state.antenna = i;
@@ -1673,6 +1730,7 @@ function closeDetail() {
   lookupCtl?.abort();
   syncControls();
   render();
+  writeHash();
 }
 
 let lookupCtl = null;
@@ -2175,6 +2233,12 @@ function setupSearch() {
   lastLevel = levelForZoom(map.getZoom());
   classify();
   renderAntLegend();
+  const sel = /^(\d+),(\d+)$/.exec(hashParams().sel ?? ''); // a shared link with a selected hectare
+  if (sel) {
+    const i = cellAt(+sel[1] + 50, +sel[2] + 50), scope = state.scope;
+    if (i >= 0) { selectCell(i); if (state.scope !== scope) { state.scope = scope; syncControls(); renderDetail(); render(); } }
+  }
+  writeHash();
   if (state.view === '3d' && map.getPitch() === 0) map.easeTo({ pitch: 55, duration: 0 });
   if (isTerrain()) { map.setMaxPitch(80); if (styleReady) installTerrain(); } // otherwise style.load installs it
   updateViewStats();
