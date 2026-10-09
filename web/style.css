@@ -302,6 +302,11 @@ svg.pyr .hit:hover { fill: var(--wash); }
 .maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: rgba(255, 255, 255, 0.85); }
 /* The map takes keyboard focus (arrows pan, +/- zoom); its own outline would be clipped. */
 #map .maplibregl-canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+/* While the map has keyboard focus, mark its centre: Enter selects the hectare there. */
+#map:has(.maplibregl-canvas:focus-visible)::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border: 2px solid var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--surface-1); pointer-events: none; z-index: 2;
+}
 /* Keep the zoom buttons clear of an open details/analysis panel. */
 body.side-open .maplibregl-ctrl-bottom-right { right: 404px; }
 
