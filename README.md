@@ -32,6 +32,15 @@ python3 serve.py --rebuild  # force a rebuild of web/data
 
 Only Python 3 is needed (standard library). The map libraries are bundled in `web/vendor/`. `serve.py` proxies swisstopo's basemaps, terrain, search and commune lookups and caches them in `.cache/geo/` (see *Offline resilience*), so you only need an internet connection for areas you haven't viewed before.
 
+# Tests
+
+```sh
+node --test tests/*.test.mjs                          # browser modules and the committed data (Node 20+)
+python3 -m unittest discover -s tests -p "test_*.py"  # serve.py and the build scripts
+```
+
+No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild, which runs only when the raw source files are present. GitHub Actions runs both suites on every push (`.github/workflows/tests.yml`).
+
 # Hosting on GitHub Pages
 
 `.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow.
@@ -79,7 +88,7 @@ The app never calls swisstopo or a CDN directly when served by `serve.py` or the
 - **Data protection**: every value from 1 to 3 is published as **3**. Summing hectares therefore overstates totals: the grid sums to 9,123,704 residents, while the commune file sums to 9,051,029. Rates on small cells are noisy, so the map greys out cells below a minimum population (default 10, adjustable).
 - **Unlocated residents**: 53,619 people whose building has no coordinates are placed on the hectare at their commune's centre (listed in `STATPOP2024_NOLOC.csv`). This creates false peaks, which you can remove with *Exclude unlocated residents*.
 - **Correlation depends on the grid size.** With the default filters, Spearman ρ between residents and sites per cell is about 0.17 at 500 m, 0.33 at 1 km, 0.53 at 2 km, 0.81 at 5 km and 0.91 at 10 km. Cells with neither residents nor sites are excluded. About half of all sites stand on hectares without residents (hills, roads, commercial buildings), and distance to a site is not signal coverage.
-- Coordinates are the LV95 south-west corner of each hectare. They are converted to WGS84 with swisstopo's approximate formulas, accurate to about 1 m.
+- Coordinates are the LV95 south-west corner of each hectare. They are converted to WGS84 with swisstopo's approximate formulas: within about 1 m near Bern and 3 m everywhere in Switzerland, far below the 100 m hectare size.
 
 # Layout
 

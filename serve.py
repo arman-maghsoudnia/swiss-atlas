@@ -102,7 +102,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def log_message(self, fmt, *args):
-        if not str(args[1]).startswith(("2", "3")):
+        # Successful requests are not logged. args[1] is the status code for request lines only;
+        # log_error ("Request timed out: %r", e) passes a single argument.
+        if len(args) < 2 or not str(args[1]).startswith(("2", "3")):
             super().log_message(fmt, *args)
 
     def do_GET(self):
