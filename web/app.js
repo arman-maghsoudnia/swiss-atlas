@@ -554,25 +554,48 @@ function computeSmooth() {
 
 // ---------------------------------------------------------------- map + layers
 const GEO_PROXY = await detectProxy(); // local caching proxy for swisstopo (see remote.js)
+const narrow = () => innerWidth <= 720; // phone layout (see style.css)
+// swisstopo's WMTS imagery covers about lon 2.8–14.1, lat 43.1–48.9 and answers 400 elsewhere; raster
+// sources without bounds (theirs included) would request those tiles whenever the map is zoomed out.
+const IMAGERY_BOUNDS = [2.9, 43.1, 14, 48.9];
+const boundRasters = (_, style) => ({
+  ...style,
+  sources: Object.fromEntries(Object.entries(style.sources).map(([id, src]) =>
+    [id, src.type === 'raster' && !src.bounds ? { ...src, bounds: IMAGERY_BOUNDS } : src])),
+});
 const map = new maplibregl.Map({
   transformRequest,
   container: 'map',
-  style: styleFor(state.basemap),
-  center: [8.23, 46.82],
-  zoom: 7.3,
-  minZoom: 6,
+  // Without a #map= position in the URL, fit Switzerland next to the panel (above it on phones).
+  bounds: [[5.96, 45.82], [10.49, 47.81]],
+  fitBoundsOptions: { padding: narrow() ? { top: 84, bottom: 40, left: 8, right: 8 } : { top: 40, bottom: 40, left: 372, right: 60 } },
+  minZoom: 5.5,
   maxZoom: 18,
   maxPitch: 70,
-  maxBounds: [[3.8, 44.9], [12.6, 48.7]],
+  maxBounds: [[2.5, 43], [14, 50.6]], // tall enough for a portrait phone to show the whole country
   hash: 'map',
   attributionControl: false,
 });
+map.setStyle(styleFor(state.basemap), { transformStyle: boundRasters });
 map.addControl(new maplibregl.AttributionControl({
   compact: true,
   customAttribution: 'Population: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT</a> · Antenna sites: <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">OFCOM</a>',
 }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+if (narrow()) { // the expanded credits would cover the bottom of a phone screen; the (i) button opens them
+  const attrib = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+  attrib?.classList.remove('maplibregl-compact-show');
+  attrib?.removeAttribute('open');
+}
+// MapLibre ignores the first callback of its ResizeObserver. A page loaded in a background tab gets that
+// callback only when first shown, so a window resized in between left the map at its old size.
+const fitCanvas = () => {
+  const c = map.getCanvas(), box = map.getContainer();
+  if (c.clientWidth !== box.clientWidth || c.clientHeight !== box.clientHeight) map.resize();
+};
+addEventListener('resize', fitCanvas);
+document.addEventListener('visibilitychange', fitCanvas);
 
 const overlay = new deck.MapboxOverlay({ interleaved: true, layers: [], onHover, onClick });
 map.addControl(overlay);
@@ -586,7 +609,7 @@ const ATLAS = ANT.shapeAtlas();
 const ATLAS_URL = ATLAS.canvas.toDataURL();
 const antSize = (i) => (state.ant.sizeByPower ? [6, 8, 10, 13][A.power[i]] : 9);
 // Markers shrink when zoomed out; at country scale 20k full-size markers would hide the population.
-const antScale = () => Math.max(0.28, Math.min(1, 0.28 + (map.getZoom() - 7.5) * 0.18));
+const antScale = () => Math.max(0.16, Math.min(1, 0.28 + (map.getZoom() - 7.5) * 0.18));
 
 function antennaLayers(dark) {
   if (!A || !state.ant.show) return [];
@@ -720,7 +743,10 @@ function setBasemap(key) {
   state.beforeId = undefined; // the old label layer is about to disappear
   render();
   styleReady = false;
-  map.setStyle(styleFor(key), { diff: false }); // a diff fails with terrain set, and rebuilds anyway
+  // Terrain must be off while the new style loads: MapLibre would draw it with the new style's projection
+  // before that exists ("shaderPreludeCode" of undefined). style.load installs it again.
+  try { map.setTerrain(null); } catch { /* the previous style is still loading and has no terrain yet */ }
+  map.setStyle(styleFor(key), { diff: false, transformStyle: boundRasters });
   classify(); // ramp orientation depends on the basemap
   renderAntLegend();
   renderDetail();
@@ -796,8 +822,9 @@ function blockAt(s, E, Nn) {
   return b === undefined ? -1 : b;
 }
 
+const canHover = matchMedia('(hover: hover)').matches; // touch screens: a tap selects; no hover tooltips
 function onHover(info) {
-  if (isTerrain()) return; // MapLibre handles pointer events on the terrain (see terrain section)
+  if (isTerrain() || !canHover) return; // MapLibre handles pointer events on the terrain (see terrain section)
   const canvas = map.getCanvas();
   if (info.layer?.id === 'ant' && info.index >= 0) {
     canvas.style.cursor = 'pointer';
@@ -928,8 +955,8 @@ async function installTerrain() {
     spec = await terrainSource();
   } catch (e) {
     console.error(e);
-    note.textContent = 'Could not load the swisstopo terrain; showing the flat map.';
     setView('2d');
+    note.textContent = 'Could not load the swisstopo terrain; showing the flat map.'; // after setView, which clears it
     return;
   }
   if (!isTerrain() || !styleReady) return; // left terrain mode, or a new style is loading (style.load re-runs this)
@@ -964,7 +991,7 @@ async function installTerrain() {
       id: 'spg-ant', type: 'symbol', source: 'spg-ant',
       layout: {
         'icon-image': ['get', 'img'], 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 7.5, ['*', ['get', 'sz'], 0.28], 11.5, ['get', 'sz']],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 6.8, ['*', ['get', 'sz'], 0.16], 7.5, ['*', ['get', 'sz'], 0.28], 11.5, ['get', 'sz']],
         visibility: state.ant.show ? 'visible' : 'none',
       },
     }, before);
@@ -976,10 +1003,12 @@ async function installTerrain() {
 }
 
 function removeTerrain() {
-  for (const id of TERRAIN_LAYERS) if (map.getLayer(id)) map.removeLayer(id);
-  map.setTerrain(null);
-  for (const id of TERRAIN_SOURCES) if (map.getSource(id)) map.removeSource(id);
   $('terrain-note').textContent = '';
+  try {
+    for (const id of TERRAIN_LAYERS) if (map.getLayer(id)) map.removeLayer(id);
+    map.setTerrain(null);
+    for (const id of TERRAIN_SOURCES) if (map.getSource(id)) map.removeSource(id);
+  } catch { /* a new basemap style is still loading, so none of these exist yet */ }
 }
 
 // Two images per category would be enough; the image id encodes shape and colour (same index).
@@ -1029,8 +1058,10 @@ function terrainAntennaAt(point) {
   const hit = map.queryRenderedFeatures([[point.x - 3, point.y - 3], [point.x + 3, point.y + 3]], { layers: ['spg-ant'] })[0];
   return hit ? hit.properties.i : -1;
 }
+map.on('movestart', () => hideTip());
+addEventListener('scroll', () => hideTip(), true); // a panel scrolled under a tapped (touch) tooltip
 map.on('mousemove', (e) => {
-  if (!isTerrain() || !CLASSES) return;
+  if (!isTerrain() || !CLASSES || !canHover) return;
   const canvas = map.getCanvas();
   const ai = terrainAntennaAt(e.point);
   if (ai >= 0) { canvas.style.cursor = 'pointer'; tipLines(e.point.x, e.point.y, [...antennaSummary(ai), 'Click for details']); return; }
@@ -1295,12 +1326,8 @@ function buildControls() {
   basemap.value = state.basemap;
   basemap.addEventListener('change', () => setBasemap(basemap.value));
 
-  if (innerWidth < 720) { $('panel').classList.add('collapsed'); $('collapse').setAttribute('aria-expanded', 'false'); }
-  $('collapse').addEventListener('click', () => {
-    const p = $('panel');
-    const collapsed = p.classList.toggle('collapsed');
-    $('collapse').setAttribute('aria-expanded', String(!collapsed));
-  });
+  if (narrow()) setCollapsed(true);
+  $('collapse').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
 
   // detail panel
   $('d-close').addEventListener('click', closeDetail);
@@ -1438,12 +1465,28 @@ function aggregate(indices) {
   return { sums, cells };
 }
 
+function setCollapsed(collapsed) {
+  $('panel').classList.toggle('collapsed', collapsed);
+  $('collapse').setAttribute('aria-expanded', String(!collapsed));
+}
+// On phones the detail/analysis sheet covers the lower half: fold the panel away and, if the selection
+// is now hidden, move the map so it sits in the visible strip above the sheet.
+function makeRoomFor(sheet) {
+  if (!narrow()) return;
+  setCollapsed(true);
+  const c = center();
+  if (!c) return;
+  const p = map.project(lv95ToWgs(c[0], c[1]));
+  const top = $('panel').getBoundingClientRect().bottom + 8, bottom = $(sheet).getBoundingClientRect().top - 8;
+  if (p.y < top || p.y > bottom) map.panBy([0, p.y - (top + bottom) / 2], { duration: 400 });
+}
 function openDetail() {
   $('analysis').hidden = true;
   $('detail').hidden = false;
   syncControls();
   renderDetail();
   render();
+  makeRoomFor('detail');
 }
 function closeDetail() {
   $('detail').hidden = true;
@@ -1734,6 +1777,7 @@ function openAnalysis() {
   $('analysis').hidden = false;
   renderAnalysis();
   render();
+  if (narrow()) setCollapsed(true);
 }
 function closeAnalysis() {
   $('analysis').hidden = true;
