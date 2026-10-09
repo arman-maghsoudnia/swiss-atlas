@@ -37,12 +37,13 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     chrome = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
       '--no-default-browser-check', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--hide-scrollbars',
       ...(process.getuid?.() === 0 ? ['--no-sandbox'] : []), 'about:blank'], { stdio: 'ignore' });
-    let port;
-    for (let i = 0; i < 100 && !port; i++) {
+    let port, exited = null;
+    chrome.on('exit', (code) => { exited = code; });
+    for (let i = 0; i < 300 && !port && exited === null; i++) { // a cold CI runner can take well over 10 s
       await sleep(100);
       try { port = fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]; } catch { /* not yet */ }
     }
-    assert.ok(port, 'Chrome did not start');
+    assert.ok(port, exited === null ? 'Chrome did not start within 30 s' : `Chrome exited with code ${exited}`);
     page = await openPage(port);
   });
 
