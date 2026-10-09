@@ -91,7 +91,7 @@ const DEFAULTS = {
   smooth: false, sigma: 300, analysisScale: 1000, exaggeration: 1.5,
   ant: { show: true, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
 };
-const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'sc', 'r']; // see writeHash()
+const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'site', 'sc', 'r']; // see writeHash()
 const saved = loadSettings();
 const state = {
   ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ...(saved.ant || {}) },
@@ -116,7 +116,8 @@ function saveSettings() {
 
 // Shareable links: next to MapLibre's map=zoom/lat/lon, the URL hash carries what the map shows
 // (defaults left out). A link with any of these opens exactly that view, overriding saved settings;
-// a plain map= link keeps the visitor's own. sel= is the selected hectare (LV95 south-west corner).
+// a plain map= link keeps the visitor's own. sel= is the selected hectare (LV95 south-west corner),
+// site= a selected antenna site (its LV95 position, which survives data updates unlike its index).
 function hashParams() {
   return Object.fromEntries(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
     const k = p.indexOf('=');
@@ -140,7 +141,8 @@ function stateFromHash() {
   if (/^[01]{5}$/.test(h.op ?? '')) state.ant.ops = [...h.op].map((c) => c === '1');
   if (ANT.TECH[h.t]) state.ant.tech = h.t;
   if (ANT.TYPE_GROUPS[h.ty]) state.ant.type = h.ty;
-  if (['radius', 'view'].includes(h.sc)) state.scope = h.sc;
+  if (['cell', 'radius', 'view'].includes(h.sc)) state.scope = h.sc;
+  else if ('site' in h) state.scope = 'radius'; // a site opens on its radius summary
   if ([0.5, 1, 2, 5, 10, 20].includes(+h.r)) state.radiusKm = +h.r;
 }
 function writeHash() {
@@ -158,7 +160,11 @@ function writeHash() {
   if (ops !== d.ant.ops.map((o) => (o ? 1 : 0)).join('')) add.push(`op=${ops}`);
   if (a.tech) add.push(`t=${a.tech}`);
   if (a.type) add.push(`ty=${a.type}`);
-  if (state.selected >= 0 && N && !$('detail').hidden) {
+  if (state.antenna >= 0 && !$('detail').hidden) {
+    add.push(`site=${A.e[state.antenna]},${A.N[state.antenna]}`);
+    if (state.scope !== 'radius') add.push(`sc=${state.scope}`);
+    if (state.scope === 'radius') add.push(`r=${state.radiusKm}`);
+  } else if (state.selected >= 0 && N && !$('detail').hidden) {
     add.push(`sel=${cellE(state.selected)},${cellN(state.selected)}`);
     if (state.scope !== 'cell') add.push(`sc=${state.scope}`);
     if (state.scope === 'radius') add.push(`r=${state.radiusKm}`);
@@ -1038,6 +1044,7 @@ function selectAntenna(i) {
   state.selected = cellAt(A.e[i], A.N[i]);
   if (state.scope !== 'radius') state.scope = 'radius';
   openDetail();
+  writeHash();
 }
 // Centre for the radius summary: the selected antenna, else the selected hectare's centre.
 function center() {
@@ -2234,8 +2241,14 @@ function setupSearch() {
   lastLevel = levelForZoom(map.getZoom());
   classify();
   renderAntLegend();
-  const sel = /^(\d+),(\d+)$/.exec(hashParams().sel ?? ''); // a shared link with a selected hectare
-  if (sel) {
+  const site = /^(\d+),(\d+)$/.exec(hashParams().site ?? ''); // a shared link with a selected antenna site
+  const sel = /^(\d+),(\d+)$/.exec(hashParams().sel ?? ''); // ... or hectare
+  const siteIdx = site && A ? A.e.findIndex((e, k) => e === +site[1] && A.N[k] === +site[2]) : -1;
+  if (siteIdx >= 0) {
+    const scope = state.scope;
+    selectAntenna(siteIdx);
+    if (state.scope !== scope) { state.scope = scope; syncControls(); renderDetail(); render(); }
+  } else if (sel) {
     const i = cellAt(+sel[1] + 50, +sel[2] + 50), scope = state.scope;
     if (i >= 0) { selectCell(i); if (state.scope !== scope) { state.scope = scope; syncControls(); renderDetail(); render(); } }
   }
