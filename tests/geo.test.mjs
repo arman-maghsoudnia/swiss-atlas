@@ -2,7 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { lv95ToWgs, wgsToLv95, squareRing } from '../web/geo.js';
+import { lv95ToWgs, wgsToLv95, squareRing, areaTest } from '../web/geo.js';
 import { loadCells, SWISS_BBOX } from './_lib.mjs';
 
 const RAD = Math.PI / 180, R_EARTH = 6371000;
@@ -153,3 +153,42 @@ test('squareRing is a closed SW -> SE -> NE -> NW ring of lv95ToWgs corners', ()
   for (let k = 0; k < 4; k++) area += ring[k][0] * ring[k + 1][1] - ring[k + 1][0] * ring[k][1];
   assert.ok(area > 0);
 });
+
+describe('areaTest (commune boundaries)', () => {
+  const sq = (x, y, s) => [[x, y], [x + s, y], [x + s, y + s], [x, y + s], [x, y]];
+
+  test('a square: inside, outside, and its bounding box', () => {
+    const { inside, box } = areaTest([[sq(0, 0, 10)]]);
+    assert.ok(inside(5, 5));
+    assert.ok(!inside(-1, 5) && !inside(11, 5) && !inside(5, 11) && !inside(5, -0.1));
+    assert.deepEqual(box, [0, 0, 10, 10]);
+  });
+
+  test('a hole (an enclave of another commune) is outside', () => {
+    const { inside } = areaTest([[sq(0, 0, 10), sq(4, 4, 2)]]);
+    assert.ok(inside(1, 1) && inside(8, 8));
+    assert.ok(!inside(5, 5), 'in the hole');
+  });
+
+  test('a commune in two parts (MultiPolygon), with the box over both', () => {
+    const { inside, box } = areaTest([[sq(0, 0, 10)], [sq(20, 0, 5)]]);
+    assert.ok(inside(5, 5) && inside(22, 2));
+    assert.ok(!inside(15, 5), 'between the parts');
+    assert.deepEqual(box, [0, 0, 25, 10]);
+  });
+
+  test('a concave (U-shaped) outline', () => {
+    const u = [[0, 0], [9, 0], [9, 9], [6, 9], [6, 3], [3, 3], [3, 9], [0, 9], [0, 0]];
+    const { inside } = areaTest([[u]]);
+    assert.ok(inside(1, 8) && inside(8, 8) && inside(4.5, 1));
+    assert.ok(!inside(4.5, 6), 'in the notch');
+  });
+
+  test('hectare centres: a 1 km square holds exactly 100', () => {
+    const { inside } = areaTest([[sq(2600000, 1200000, 1000)]]);
+    let n = 0;
+    for (let e = 2599000; e < 2602000; e += 100) for (let k = 1199000; k < 1202000; k += 100) if (inside(e + 50, k + 50)) n++;
+    assert.equal(n, 100);
+  });
+});
+

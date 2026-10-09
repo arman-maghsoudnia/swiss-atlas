@@ -1,7 +1,7 @@
 /* Swiss population grid – hectare map of STATPOP data with OFCOM mobile antenna sites.
  * Data comes from web/data (built by scripts/); rendering is MapLibre + deck.gl (globals from index.html). */
 
-import { lv95ToWgs, wgsToLv95, squareRing } from './geo.js';
+import { lv95ToWgs, wgsToLv95, squareRing, areaTest } from './geo.js';
 import { blurSurface, makeColorScale, colorize, toTiles, pixelAt } from './smooth.js';
 import * as ANT from './antennas.js';
 import { blockPairs, correlate, distanceCurve, cdfChart, scatterChart } from './analysis.js';
@@ -2067,20 +2067,7 @@ const pointKey = (E, Nn) => `${Math.floor(E / 100)}:${Math.floor(Nn / 100)}`;
 function boundaryFrom(hit) {
   const g = hit.geometry, a = hit.attributes;
   const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; // [[outer, ...holes], …], LV95
-  const rings = polys.flat();
-  let e0 = Infinity, n0 = Infinity, e1 = -Infinity, n1 = -Infinity;
-  for (const [x, y] of polys.flatMap((p) => p[0])) { e0 = Math.min(e0, x); n0 = Math.min(n0, y); e1 = Math.max(e1, x); n1 = Math.max(n1, y); }
-  const inside = (x, y) => { // even-odd rule over all rings, so holes (enclaves) are left out
-    if (x < e0 || x > e1 || y < n0 || y > n1) return false;
-    let c = false;
-    for (const r of rings) {
-      for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
-        const [xk, yk] = r[k], [xj, yj] = r[j];
-        if ((yk > y) !== (yj > y) && x < ((xj - xk) * (y - yk)) / (yj - yk) + xk) c = !c;
-      }
-    }
-    return c;
-  };
+  const { inside } = areaTest(polys);
   const cells = [];
   for (let i = 0; i < N; i++) if (inside(cellE(i) + 50, cellN(i) + 50)) cells.push(i);
   const inA = new Uint8Array(A ? A.n : 0);

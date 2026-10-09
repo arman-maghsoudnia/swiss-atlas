@@ -18,3 +18,26 @@ export function wgsToLv95(lon, lat) {
 export function squareRing(E, N, size) {
   return [[E, N], [E + size, N], [E + size, N + size], [E, N + size], [E, N]].map(([e, n]) => lv95ToWgs(e, n));
 }
+
+/**
+ * Point-in-area test for a (multi)polygon: polys = [[outer, ...holes], …], rings as [[x, y], …] in any
+ * planar coordinates (LV95 here). Even-odd rule over all rings, so holes and enclaves are outside.
+ * Returns inside(x, y), with a bounding-box shortcut, and the box [x0, y0, x1, y1].
+ */
+export function areaTest(polys) {
+  const rings = polys.flat();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of polys) for (const [x, y] of p[0]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  const inside = (x, y) => {
+    if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+    let c = false;
+    for (const r of rings) {
+      for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
+        const [xk, yk] = r[k], [xj, yj] = r[j];
+        if ((yk > y) !== (yj > y) && x < ((xj - xk) * (y - yk)) / (yj - yk) + xk) c = !c;
+      }
+    }
+    return c;
+  };
+  return { inside, box: [x0, y0, x1, y1] };
+}
