@@ -72,8 +72,10 @@ export function filterSites(A, f) {
 const SWISS_AREA = 41285e6; // m²
 const bkey = (bx, by) => bx * 100000 + by; // LV95 / bucket size stays far below 100000
 
+const bucketSize = (count) => Math.min(50000, Math.max(1000, Math.round(Math.sqrt(SWISS_AREA / Math.max(1, count)) / 1000) * 1000));
+
 export function buildIndex(A, sites) {
-  const size = Math.min(50000, Math.max(1000, Math.round(Math.sqrt(SWISS_AREA / Math.max(1, sites.length)) / 1000) * 1000));
+  const size = bucketSize(sites.length);
   const buckets = new Map();
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const i of sites) {
@@ -110,6 +112,51 @@ export function nearest(A, index, E, N) {
     for (let d = 1 - r; d < r; d++) { scan(bx - r, by + d); scan(bx + r, by + d); }
   }
   return [best, Math.sqrt(bestD2)];
+}
+
+/**
+ * Nearest site for many points at once (every hectare): the same answers as nearest(), with the buckets
+ * in flat arrays instead of a Map, which halves the time. Writes the distance (NaN without sites) and the
+ * site index (-1) of point q into outDist[q] and outNear[q].
+ */
+export function nearestAll(A, sites, pointE, pointN, n, outDist, outNear) {
+  const count = sites.length;
+  if (!count) { outDist.fill(NaN); outNear.fill(-1); return; }
+  const size = bucketSize(count);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const i of sites) {
+    const bx = Math.floor(A.e[i] / size), by = Math.floor(A.N[i] / size);
+    x0 = Math.min(x0, bx); x1 = Math.max(x1, bx); y0 = Math.min(y0, by); y1 = Math.max(y1, by);
+  }
+  const gw = x1 - x0 + 1, gh = y1 - y0 + 1;
+  const start = new Int32Array(gw * gh + 1); // bucket k holds items start[k] .. start[k + 1] - 1
+  const bucketOf = (i) => (Math.floor(A.N[i] / size) - y0) * gw + Math.floor(A.e[i] / size) - x0;
+  for (const i of sites) start[bucketOf(i) + 1]++;
+  for (let k = 0; k < gw * gh; k++) start[k + 1] += start[k];
+  const fill = start.slice(0, gw * gh), ex = new Float64Array(count), ny = new Float64Array(count), idx = new Int32Array(count);
+  for (const i of sites) { const p = fill[bucketOf(i)]++; ex[p] = A.e[i]; ny[p] = A.N[i]; idx[p] = i; } // in sites order, as buildIndex
+  let E = 0, Nq = 0, best = -1, bestD2 = Infinity;
+  const scan = (x, y) => {
+    if (x < x0 || x > x1 || y < y0 || y > y1) return;
+    const k = (y - y0) * gw + x - x0;
+    for (let p = start[k], end = start[k + 1]; p < end; p++) {
+      const dx = ex[p] - E, dy = ny[p] - Nq, d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) { bestD2 = d2; best = idx[p]; }
+    }
+  };
+  for (let q = 0; q < n; q++) {
+    E = pointE(q); Nq = pointN(q); best = -1; bestD2 = Infinity;
+    const bx = Math.floor(E / size), by = Math.floor(Nq / size);
+    const lastRing = Math.max(bx - x0, x1 - bx, by - y0, y1 - by);
+    scan(bx, by);
+    for (let r = 1; r <= lastRing; r++) { // same ring order and stopping rule as nearest()
+      if (best >= 0 && (r - 1) * size > Math.sqrt(bestD2)) break;
+      for (let d = -r; d <= r; d++) { scan(bx + d, by - r); scan(bx + d, by + r); }
+      for (let d = 1 - r; d < r; d++) { scan(bx - r, by + d); scan(bx + r, by + d); }
+    }
+    outNear[q] = best;
+    outDist[q] = best >= 0 ? Math.sqrt(bestD2) : NaN;
+  }
 }
 
 /** Sites within radius r (m) of (E, N). */

@@ -245,10 +245,7 @@ function ensureDist() {
   if (distVersion === antVersion || !A) return;
   DIST = new Float32Array(N);
   NEAR = new Int32Array(N);
-  for (let i = 0; i < N; i++) {
-    const [j, d] = ANT.nearest(A, AIDX, cellE(i) + 50, cellN(i) + 50);
-    NEAR[i] = j; DIST[i] = j >= 0 ? d : NaN;
-  }
+  ANT.nearestAll(A, SITES, (i) => cellE(i) + 50, (i) => cellN(i) + 50, N, DIST, NEAR);
   distVersion = antVersion;
 }
 

@@ -4,6 +4,8 @@ An interactive map of Switzerland at hectare resolution (100 × 100 m). It shows
 
 **Live map:** https://arman-maghsoudnia.github.io/swiss-atlas/
 
+[![Map of Switzerland coloured by residents per hectare, with mobile antenna sites](web/preview.jpg)](https://arman-maghsoudnia.github.io/swiss-atlas/)
+
 # Data sources and terms of use
 
 The repo includes only the data derived for the map (`web/data/`). To rebuild it, download the raw files as shown below. The derived files stay under their sources' terms, and the source must be cited wherever the data or the map is shown (the map does this in its credits).

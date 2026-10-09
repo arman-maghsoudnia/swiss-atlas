@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  filterSites, buildIndex, nearest, within, TECH, TECH_LABEL, TYPE_GROUPS, COLOR_MODES, SHAPES,
+  filterSites, buildIndex, nearest, nearestAll, within, TECH, TECH_LABEL, TYPE_GROUPS, COLOR_MODES, SHAPES,
 } from '../web/antennas.js';
 import { loadAntennaData, loadCells, makeSites, rng, SWISS_BBOX } from './_lib.mjs';
 
@@ -167,6 +167,35 @@ describe('nearest() equals brute force', () => {
       for (const [E, N] of randomQueries(label.length, 500)) assertNearest(S, sites, idx, E, N);
       for (const [E, N] of pts.slice(0, 50)) assertNearest(S, sites, idx, E + 1, N - 1);
     }
+  });
+});
+
+describe('nearestAll() equals nearest()', () => {
+  // The app's per-hectare distance map uses nearestAll; it must give the same site and distance.
+  const check = (S, sites, pts) => {
+    const idx = buildIndex(S, Int32Array.from(sites));
+    const dist = new Float32Array(pts.length), near = new Int32Array(pts.length);
+    nearestAll(S, Int32Array.from(sites), (q) => pts[q][0], (q) => pts[q][1], pts.length, dist, near);
+    pts.forEach(([E, N], q) => {
+      const [j, d] = nearest(S, idx, E, N);
+      assert.equal(near[q], j, `point ${E}/${N}`);
+      if (j < 0) assert.ok(Number.isNaN(dist[q])); else assert.equal(dist[q], Math.fround(d));
+    });
+  };
+  for (const [label, f] of FILTERS) {
+    test(`hectare centres and random points: ${label}`, () => {
+      const { meta, n, E_IDX, N_IDX } = loadCells();
+      const r = rng(7);
+      const cells = Array.from({ length: 4000 }, () => Math.floor(r() * n))
+        .map((i) => [meta.e0 + E_IDX[i] * 100 + 50, meta.n0 + N_IDX[i] * 100 + 50]);
+      check(A, Array.from(filterSites(A, f)), [...cells, ...randomQueries(9, 500)]);
+    });
+  }
+  test('no sites: NaN and -1 everywhere', () => {
+    const dist = new Float32Array(3), near = new Int32Array(3);
+    nearestAll(A, new Int32Array(0), () => 2600000, () => 1200000, 3, dist, near);
+    assert.ok(dist.every(Number.isNaN));
+    assert.deepEqual([...near], [-1, -1, -1]);
   });
 });
 
