@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Swiss Population Grid</title>
+  <meta name="description" content="Interactive hectare map of the Swiss permanent resident population (BFS STATPOP 2024) with OFCOM mobile antenna sites.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='9' width='4' height='6' fill='%239ec5f4'/%3E%3Crect x='6' y='5' width='4' height='10' fill='%233987e5'/%3E%3Crect x='11' y='1' width='4' height='14' fill='%23184f95'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/deck.gl.min.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside id="panel" class="card" aria-label="Map controls">
+    <header class="panel-head">
+      <div>
+        <h1>Swiss population grid</h1>
+        <p class="sub" id="subtitle">Permanent residents per hectare · STATPOP</p>
+      </div>
+      <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" title="Collapse panel">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
+
+    <div id="panel-body">
+      <div class="search">
+        <input id="search" type="search" placeholder="Search a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
+        <ul id="search-results" role="listbox" hidden></ul>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><span class="kpi-v" id="kpi-view">–</span><span class="kpi-l">residents in view</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l">inhabited hectares</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-ant">–</span><span class="kpi-l">antenna sites</span></div>
+      </div>
+
+      <section class="block">
+        <label class="lbl" for="metric">Colour by</label>
+        <select id="metric"></select>
+        <div id="raw-opts" class="row" hidden>
+          <select id="raw-col" aria-label="Attribute"></select>
+          <div class="seg" role="radiogroup" aria-label="Show as">
+            <button data-raw-mode="count" role="radio">Count</button>
+            <button data-raw-mode="share" role="radio">% of residents</button>
+          </div>
+        </div>
+        <p class="hint" id="metric-desc"></p>
+        <div id="legend" class="legend" aria-live="polite"></div>
+        <p class="hint" id="res-note"></p>
+      </section>
+
+      <section class="block" id="ant-block">
+        <div class="row between">
+          <label class="check strong"><input type="checkbox" id="ant-show"> Mobile antenna sites</label>
+          <button id="open-analysis" class="link-btn" type="button">Antennas vs population ›</button>
+        </div>
+        <div id="ant-body">
+          <div class="ops" id="ant-ops" role="group" aria-label="Operators"></div>
+          <div class="row">
+            <select id="ant-tech" class="compact grow" aria-label="Technology">
+              <option value="">Any technology</option>
+              <option value="5G">Offers 5G</option>
+              <option value="4G">Offers 4G</option>
+              <option value="3G">Offers 3G</option>
+              <option value="2G">Offers 2G</option>
+            </select>
+            <select id="ant-type" class="compact grow" aria-label="Site type">
+              <option value="">Any type</option>
+              <option value="macro">Outdoor &gt; 6 W ERP</option>
+              <option value="small">Small cells ≤ 6 W</option>
+              <option value="tunnel">Tunnel</option>
+              <option value="other">Temporary / not specified</option>
+            </select>
+          </div>
+          <div class="row between">
+            <label class="lbl" for="ant-color">Colour sites by</label>
+            <select id="ant-color" class="compact">
+              <option value="single">One colour</option>
+              <option value="operator">Operator</option>
+              <option value="tech">Technology</option>
+              <option value="type">Type</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" id="ant-size"> Size by power class</label>
+          <div id="ant-legend" class="legend"></div>
+          <p class="hint">Position of each station's first mast (OFCOM). SBB sites are railway radio (GSM-R) and follow the tracks, not people, so they start unchecked.</p>
+        </div>
+      </section>
+
+      <section class="block">
+        <div class="row between">
+          <label class="lbl" for="minpop">Min. residents for rates</label>
+          <output id="minpop-out" for="minpop" class="val"></output>
+        </div>
+        <input id="minpop" type="range" min="1" max="100" step="1">
+        <p class="hint">Hectares with 1–3 residents are published as “3”, so rates on small cells are noise. Cells below the threshold are drawn grey.</p>
+
+        <label class="check"><input type="checkbox" id="noloc"> Remove non-geocoded residents</label>
+        <p class="hint" id="noloc-hint"></p>
+      </section>
+
+      <section class="block">
+        <div class="row between">
+          <span class="lbl">View</span>
+          <div class="seg" role="radiogroup" aria-label="View">
+            <button data-view="2d" role="radio" title="Flat map">Flat</button>
+            <button data-view="3d" role="radio" title="Extruded columns, height = residents">Columns</button>
+            <button data-view="terrain" role="radio" title="Draped over swisstopo's 3D terrain">Terrain</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="smooth"> Smooth heatmap</label>
+        <div id="sigma-row" class="row between" hidden>
+          <label class="lbl" for="sigma">Smoothing radius <output id="sigma-out" for="sigma"></output></label>
+          <input id="sigma" type="range" min="0" max="6" step="1">
+        </div>
+        <div id="exag-row" class="row between" hidden>
+          <label class="lbl" for="exag">Relief exaggeration <output id="exag-out" for="exag"></output></label>
+          <input id="exag" type="range" min="1" max="3" step="0.1">
+        </div>
+        <p class="hint" id="terrain-note"></p>
+        <div id="height-row" class="row between" hidden>
+          <label class="lbl" for="height">Height = residents × <output id="height-out" for="height"></output> m</label>
+          <input id="height" type="range" min="0.5" max="20" step="0.5">
+        </div>
+        <div class="row between">
+          <label class="lbl" for="opacity">Opacity</label>
+          <input id="opacity" type="range" min="0.2" max="1" step="0.05">
+        </div>
+        <div class="row between" id="dim-row">
+          <label class="lbl" for="dim">Dim basemap</label>
+          <input id="dim" type="range" min="0" max="1" step="0.05">
+        </div>
+        <div class="row between">
+          <label class="lbl" for="basemap">Basemap</label>
+          <select id="basemap" class="compact">
+            <option value="imagery">SWISSIMAGE + labels</option>
+            <option value="swissimage">SWISSIMAGE</option>
+            <option value="national">National map (colour)</option>
+            <option value="nationalGrey">National map (grey)</option>
+            <option value="light">Light base map</option>
+            <option value="base">Base map</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+      </section>
+
+      <footer class="src">
+        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT</a>;
+        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">OFCOM</a> (provided by the operators, no guarantee of accuracy).
+        Reference date 31.12.2024. Values 1–3 are published as 3 (data protection), so sums of hectares slightly exceed official totals.
+        Click a hectare for details.
+      </footer>
+    </div>
+  </aside>
+
+  <aside id="detail" class="card" aria-label="Selection details" hidden>
+    <header class="panel-head">
+      <div>
+        <h2 id="d-title">Hectare</h2>
+        <p class="sub" id="d-sub"></p>
+      </div>
+      <button id="d-close" class="icon-btn" title="Close (Esc)" aria-label="Close details">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <div class="scope row">
+      <div class="seg" role="radiogroup" aria-label="Summarise">
+        <button data-scope="cell" role="radio">This hectare</button>
+        <button data-scope="radius" role="radio">Radius</button>
+        <button data-scope="view" role="radio">Map view</button>
+      </div>
+      <select id="radius" class="compact" aria-label="Radius">
+        <option value="0.5">500 m</option>
+        <option value="1">1 km</option>
+        <option value="2">2 km</option>
+        <option value="5">5 km</option>
+        <option value="10">10 km</option>
+        <option value="20">20 km</option>
+      </select>
+    </div>
+    <div id="d-body"></div>
+  </aside>
+
+  <aside id="analysis" class="card" aria-label="Antennas vs population" hidden>
+    <header class="panel-head">
+      <div>
+        <h2>Antennas vs population</h2>
+        <p class="sub" id="a-sub"></p>
+      </div>
+      <button id="a-close" class="icon-btn" title="Close (Esc)" aria-label="Close analysis">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <div id="a-body"></div>
+  </aside>
+
+  <div id="tooltip" role="status" hidden></div>
+
+  <div id="loading" class="card">
+    <p id="loading-msg">Loading hectare data…</p>
+    <div class="bar"><div id="loading-bar"></div></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

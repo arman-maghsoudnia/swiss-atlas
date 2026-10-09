@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+
+# swisstopo cache written by serve.py
+.cache/
+
+# Raw source data, downloaded as described in README.md (only web/data is committed)
+/ag-b-00.03-vz2024statpop/
+/ag-b-00.03-vz2024statpop.zip
+/AntennaLocation/*.json

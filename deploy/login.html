@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Swiss Population Grid</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='9' width='4' height='6' fill='%239ec5f4'/%3E%3Crect x='6' y='5' width='4' height='10' fill='%233987e5'/%3E%3Crect x='11' y='1' width='4' height='14' fill='%23184f95'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f9f9f7; --surface: #fcfcfb; --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+      --border: rgba(11, 11, 11, 0.10); --axis: #c3c2b7; --accent: #2a78d6; --critical: #d03b3b;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 6px 24px rgba(0, 0, 0, .10);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --page: #0d0d0d; --surface: #1a1a19; --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+        --border: rgba(255, 255, 255, 0.10); --axis: #383835; --accent: #3987e5; --critical: #e66767;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 24px rgba(0, 0, 0, .45);
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+      --border: rgba(255, 255, 255, 0.10); --axis: #383835; --accent: #3987e5; --critical: #e66767;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+      background: var(--page); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    form {
+      width: 100%; max-width: 340px; padding: 22px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+    p { margin: 4px 0 18px; color: var(--text-2); font-size: 13px; }
+    label { display: block; font-size: 12px; font-weight: 550; color: var(--text-2); margin-bottom: 6px; }
+    input {
+      width: 100%; font: inherit; color: var(--text); background: var(--surface);
+      border: 1px solid var(--axis); border-radius: 8px; padding: 9px 10px;
+    }
+    input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button {
+      width: 100%; margin-top: 14px; font: inherit; font-weight: 600; cursor: pointer;
+      border: 0; border-radius: 8px; padding: 9px 10px; background: var(--text); color: var(--surface);
+    }
+    button:disabled { opacity: 0.6; cursor: progress; }
+    .msg { min-height: 18px; margin: 10px 0 0; font-size: 12.5px; color: var(--critical); }
+  </style>
+</head>
+<body>
+  <form id="f" autocomplete="on">
+    <h1>Swiss population grid</h1>
+    <p>Population per hectare and mobile antenna sites. Enter the password to continue.</p>
+    <label for="pw">Password</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button id="go" type="submit">Open the map</button>
+    <div class="msg" id="msg" role="alert"></div>
+  </form>
+  <script>
+    'use strict';
+    // The cookie holds SHA-256("spg-v1:" + password); nginx compares it with the stored hash.
+    // crypto.subtle is unavailable on plain http://, hence this small SHA-256.
+    function sha256(text) {
+      const ror = (x, n) => (x >>> n) | (x << (32 - n));
+      const primes = [];
+      for (let n = 2; primes.length < 64; n++) if (primes.every((p) => n % p)) primes.push(n);
+      const frac = (x) => ((x - Math.floor(x)) * 2 ** 32) >>> 0;
+      const K = primes.map((p) => frac(Math.cbrt(p)));
+      const H = primes.slice(0, 8).map((p) => frac(Math.sqrt(p)));
+      const bytes = new TextEncoder().encode(text);
+      const len = ((bytes.length + 9 + 63) >> 6) << 6;
+      const m = new Uint8Array(len);
+      m.set(bytes);
+      m[bytes.length] = 0x80;
+      const dv = new DataView(m.buffer);
+      dv.setUint32(len - 8, Math.floor((bytes.length * 8) / 2 ** 32));
+      dv.setUint32(len - 4, (bytes.length * 8) >>> 0);
+      const w = new Uint32Array(64);
+      for (let off = 0; off < len; off += 64) {
+        for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + 4 * i);
+        for (let i = 16; i < 64; i++) {
+          const s0 = ror(w[i - 15], 7) ^ ror(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+          const s1 = ror(w[i - 2], 17) ^ ror(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+          w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+        }
+        let [a, b, c, d, e, f, g, h] = H;
+        for (let i = 0; i < 64; i++) {
+          const t1 = (h + (ror(e, 6) ^ ror(e, 11) ^ ror(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0;
+          const t2 = ((ror(a, 2) ^ ror(a, 13) ^ ror(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+          h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+        }
+        [a, b, c, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) >>> 0; });
+      }
+      return H.map((x) => x.toString(16).padStart(8, '0')).join('');
+    }
+
+    // Fixed rather than taken from location.pathname: a crafted path such as //evil.example/..%2F… still
+    // reaches this page through nginx, and would otherwise make base point to another site.
+    const base = '/swiss-population-grid/';
+    const cookie = (value, maxAge) =>
+      `spg_auth=${value}; Path=${base}; Max-Age=${maxAge}; SameSite=Lax`;
+    const msg = document.getElementById('msg'), go = document.getElementById('go');
+
+    document.getElementById('f').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      go.disabled = true;
+      document.cookie = cookie(sha256('spg-v1:' + document.getElementById('pw').value), 60 * 60 * 24 * 365);
+      try {
+        // A signed-in request returns the file; otherwise nginx redirects back here.
+        const res = await fetch(base + 'data/meta.json', { method: 'HEAD', cache: 'no-store', redirect: 'manual' });
+        if (res.ok) { location.replace(base + location.hash); return; }
+        document.cookie = cookie('', 0);
+        msg.textContent = res.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'Wrong password.';
+      } catch {
+        msg.textContent = 'Could not reach the server.';
+      }
+      go.disabled = false;
+      document.getElementById('pw').select();
+    });
+  </script>
+</body>
+</html>
