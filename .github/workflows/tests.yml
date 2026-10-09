@@ -26,6 +26,21 @@ jobs:
           node-version: 22
       - run: node --test tests/*.test.mjs
 
+  browser:
+    name: Browser smoke test (headless Chrome)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # ubuntu-latest ships Google Chrome; the test blocks geo.admin.ch, so it needs no network access.
+      - run: node --test tests/e2e.test.mjs
+        env:
+          SPG_E2E: "1"
+          CHROME: /usr/bin/google-chrome
+
   python:
     name: Python (unittest)
     runs-on: ubuntu-latest

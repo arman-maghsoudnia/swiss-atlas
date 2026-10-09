@@ -41,7 +41,11 @@ node --test tests/*.test.mjs                          # browser modules and the 
 python3 -m unittest discover -s tests -p "test_*.py"  # serve.py and the build scripts
 ```
 
-No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild, which runs only when the raw source files are present. GitHub Actions runs both suites on every push (`.github/workflows/tests.yml`).
+```sh
+SPG_E2E=1 node --test tests/e2e.test.mjs              # the page in headless Chrome (set CHROME=... if it is not found)
+```
+
+No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild, which runs only when the raw source files are present. The browser test blocks geo.admin.ch and uses no basemap, so it runs offline. GitHub Actions runs all three on every push (`.github/workflows/tests.yml`).
 
 # Hosting on GitHub Pages
 
