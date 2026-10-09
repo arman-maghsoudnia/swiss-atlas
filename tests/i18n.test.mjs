@@ -71,7 +71,7 @@ describe('translations', () => {
     assert.equal(t('Within {dist}', { dist: '2 km' }), 'Within 2 km');
     assert.equal(t('{a} and {b}', { a: 1 }), '1 and {b}', 'an unknown placeholder stays');
     assert.equal(tp(1, '{n} site', '{n} sites'), '1 site');
-    assert.equal(tp(12345, '{n} site', '{n} sites'), '12’345 sites');
+    assert.match(tp(12345, '{n} site', '{n} sites'), /^12['’]345 sites$/); // ICU versions differ on the apostrophe
     assert.equal(fmtFixed(2.5, 2), '2.50');
     assert.equal(fmtPct(0.264, 1), '26.4%');
   });
