@@ -252,6 +252,7 @@ dl.props dd { margin: 0; color: var(--text-primary); }
 .tile { display: flex; flex-direction: column; min-width: 0; }
 .tile .v { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
 .tile .l { color: var(--text-muted); font-size: 11px; }
+.tile .ref { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .sec { margin-top: 16px; }
 .sec h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }

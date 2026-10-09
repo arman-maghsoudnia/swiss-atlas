@@ -2182,13 +2182,26 @@ function renderDetail() {
   const shareM = { kind: 'share' };
 
   const tiles = el('div', 'tiles');
-  const tile = (v, l) => { const t = el('div', 'tile'); t.append(el('span', 'v', v), el('span', 'l', l)); tiles.append(t); };
+  const tile = (v, l, ch) => {
+    const t = el('div', 'tile');
+    t.append(el('span', 'v', v), el('span', 'l', l));
+    if (ch) { // the same figure for Switzerland, for comparison
+      const ref = el('span', 'ref');
+      ref.title = 'Switzerland, from the same hectare data (where small counts are rounded up to 3)';
+      const abbr = el('span', null, 'CH ');
+      abbr.setAttribute('aria-hidden', 'true');
+      ref.append(abbr, el('span', 'sr-only', 'Switzerland: '), ch);
+      t.append(ref);
+    }
+    tiles.append(t);
+  };
+  const ch = national();
   tile(fmtCount(residents, isCell), 'residents');
   tile(fmtCount(sums.HPTOT, isCell), 'households');
-  tile(Number.isFinite(hhSize) ? hhSize.toFixed(2) : '–', 'household size');
-  tile(fmtValue(shareM, share(sums.BB12, sums.BB11 + sums.BB12), 0), 'foreign nationals');
-  tile(Number.isFinite(meanAge) ? meanAge.toFixed(1) : '–', 'average age');
-  tile(fmtValue(shareM, share(age(14, 19).reduce((s, k) => s + sums[k], 0), agesSum), 0), 'aged 65+');
+  tile(Number.isFinite(hhSize) ? hhSize.toFixed(2) : '–', 'household size', ch.hhSize.toFixed(2));
+  tile(fmtValue(shareM, share(sums.BB12, sums.BB11 + sums.BB12), 0), 'foreign nationals', fmtValue(shareM, ch.foreign, 0));
+  tile(Number.isFinite(meanAge) ? meanAge.toFixed(1) : '–', 'average age', ch.meanAge.toFixed(1));
+  tile(fmtValue(shareM, share(age(14, 19).reduce((s, k) => s + sums[k], 0), agesSum), 0), 'aged 65+', fmtValue(shareM, ch.old, 0));
   body.insertBefore(tiles, body.querySelector('.ant-sec'));
 
   if (isCell && NOLOC_OF.has(i)) {
@@ -2226,6 +2239,21 @@ function renderDetail() {
   if (!isCell) {
     body.append(el('p', 'note', 'Sums of hectare values. Counts of 1–3 are published as 3, so totals run slightly high.'));
   }
+}
+
+// Switzerland as a whole, from the same hectare data (so with the same rounding of small counts).
+let NATIONAL = null;
+function national() {
+  if (NATIONAL) return NATIONAL;
+  const t = META.totals, sum = (keys, w = () => 1) => keys.reduce((s, k, j) => s + t[k] * w(j), 0);
+  const ages = sum(ALL_AGES);
+  NATIONAL = {
+    hhSize: sum(HH, (j) => j + 1) / sum(HH),
+    foreign: t.BB12 / (t.BB11 + t.BB12),
+    meanAge: sum(ALL_AGES, (j) => meanAgeWeights[j]) / ages,
+    old: sum(age(14, 19)) / ages,
+  };
+  return NATIONAL;
 }
 
 function antennaProps(i) {
