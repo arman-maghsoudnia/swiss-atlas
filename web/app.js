@@ -1627,26 +1627,28 @@ function refresh() { // metric, attribute or minPop changed (the detail panel do
 }
 
 // ---------------------------------------------------------------- view statistics
-function viewBounds() {
-  const b = map.getBounds();
-  return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+// Is a lon/lat point visible? Flat and north-up: the map's bounds. Rotated or tilted (columns, terrain):
+// the quadrilateral under the screen corners, since the bounding box would also count land out of view.
+function viewTest() {
+  const b = map.getBounds(), w = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+  const inBox = (x, y) => x >= w && x <= e && y >= s && y <= n;
+  if (!map.getPitch() && !map.getBearing()) return inBox;
+  const { width, height } = map.getCanvas().getBoundingClientRect();
+  const q = [[0, 0], [width, 0], [width, height], [0, height]].map((pt) => map.unproject(pt)).map((ll) => [ll.lng, ll.lat]);
+  const sign = Math.sign((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[1][1] - q[0][1]) * (q[2][0] - q[0][0]));
+  return (x, y) => inBox(x, y) && q.every(([ax, ay], k) => {
+    const [bx, by] = q[(k + 1) % 4];
+    return sign * ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) >= 0;
+  });
 }
 function viewIndices() {
-  const [w, s, e, n] = viewBounds();
-  const out = [];
-  for (let i = 0; i < N; i++) {
-    const x = CENTER[2 * i], y = CENTER[2 * i + 1];
-    if (x >= w && x <= e && y >= s && y <= n) out.push(i);
-  }
+  const inView = viewTest(), out = [];
+  for (let i = 0; i < N; i++) if (inView(CENTER[2 * i], CENTER[2 * i + 1])) out.push(i);
   return out;
 }
 function viewSites() {
-  const [w, s, e, n] = viewBounds();
-  const out = [];
-  for (const i of SITES) {
-    const x = A.pos[2 * i], y = A.pos[2 * i + 1];
-    if (x >= w && x <= e && y >= s && y <= n) out.push(i);
-  }
+  const inView = viewTest(), out = [];
+  for (const i of SITES) if (inView(A.pos[2 * i], A.pos[2 * i + 1])) out.push(i);
   return out;
 }
 function updateViewStats() {
