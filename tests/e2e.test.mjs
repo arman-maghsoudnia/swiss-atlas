@@ -66,7 +66,7 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     await load(1280, 800, false);
     const ev = page.ev;
     assert.equal(await ev(`document.title`), 'Swiss atlas – population and mobile antennas');
-    assert.match(await ev(`document.getElementById('subtitle').textContent`), /31 Dec 2024/);
+    assert.match(await ev(`document.getElementById('subtitle').textContent`), /31\sDec\s2024/);
     const residents = Number((await ev(`document.getElementById('kpi-view').textContent`)).replace(/\D/g, ''));
     assert.ok(residents > 9_000_000 && residents <= 9_123_704, `residents in view ${residents}`); // first view: all of Switzerland
     assert.equal(await ev(`document.querySelectorAll('#legend button.legend-row').length`), 7);

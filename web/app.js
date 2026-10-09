@@ -2302,7 +2302,7 @@ function setupSearch() {
     console.error(e);
     return;
   }
-  $('subtitle').textContent = `Population per hectare · 31 Dec ${META.year}`;
+  $('subtitle').textContent = `Population per hectare · 31\u00a0Dec\u00a0${META.year}`; // the date wraps as one
   updateSites();
   console.debug(GEO_PROXY ? 'swisstopo requests go through the local caching proxy' : 'no caching proxy: swisstopo is requested directly');
   buildControls();
