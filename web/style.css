@@ -104,6 +104,11 @@ a { color: var(--accent); }
   border: 0; background: transparent; color: var(--text-secondary); cursor: pointer;
 }
 .icon-btn:hover { background: var(--wash); color: var(--text-primary); }
+.head-btns { display: flex; gap: 2px; flex: none; }
+#toast {
+  position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 15;
+  padding: 7px 12px; font-size: 12.5px; pointer-events: none;
+}
 
 .block { padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--grid); }
 

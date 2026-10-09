@@ -1553,6 +1553,7 @@ function buildControls() {
 
   if (narrow()) setCollapsed(true);
   $('collapse').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
+  $('share').addEventListener('click', shareView);
 
   // detail panel
   $('d-close').addEventListener('click', closeDetail);
@@ -1724,6 +1725,28 @@ function aggregate(indices) {
   return { sums, cells };
 }
 
+// Share the current view: the URL already carries it (see writeHash). Phones get the system share
+// sheet; elsewhere the link is copied (plain http has no clipboard API, so a prompt shows it).
+async function shareView() {
+  writeHash();
+  const url = location.href;
+  try {
+    if (navigator.share && !canHover) { await navigator.share({ title: document.title, url }); return; }
+    if (navigator.clipboard && isSecureContext) { await navigator.clipboard.writeText(url); toast('Link to this view copied'); return; }
+  } catch (e) {
+    if (e.name === 'AbortError') return; // share sheet dismissed
+  }
+  prompt('Copy the link to this view:', url);
+}
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.hidden = false;
+  announce(msg);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
+}
 function setCollapsed(collapsed) {
   $('panel').classList.toggle('collapsed', collapsed);
   $('collapse').setAttribute('aria-expanded', String(!collapsed));
