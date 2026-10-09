@@ -794,6 +794,8 @@ addEventListener('resize', fitCanvas);
 // MapLibre logs errors only when nobody listens; tile requests cancelled by quick zooming or a basemap
 // switch surface as AbortErrors, which are expected and not worth a console error.
 map.on('error', (e) => { if (e.error?.name !== 'AbortError') console.error(e.error ?? e); });
+// With basemap "None" the background and the colour ramps follow the system theme: redo them on a switch.
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (state.basemap === 'none' && CLASSES) setBasemap('none'); });
 document.addEventListener('visibilitychange', fitCanvas);
 
 const overlay = new deck.MapboxOverlay({ interleaved: true, layers: [], onHover, onClick });
