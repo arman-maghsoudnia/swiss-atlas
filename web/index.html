@@ -61,7 +61,8 @@
       </div>
       <button id="sum-view" type="button" class="link-btn">Summarise this view <span aria-hidden="true">›</span></button>
 
-      <section class="block">
+      <section class="block" aria-labelledby="h-colour">
+        <h2 id="h-colour" class="sr-only">Population layer</h2>
         <label class="lbl" for="metric">Colour by</label>
         <select id="metric"></select>
         <div id="raw-opts" class="row" hidden>
@@ -76,7 +77,8 @@
         <p class="hint" id="res-note"></p>
       </section>
 
-      <section class="block" id="ant-block">
+      <section class="block" id="ant-block" aria-labelledby="h-ant">
+        <h2 id="h-ant" class="sr-only">Antenna sites</h2>
         <div class="row between">
           <label class="check strong"><input type="checkbox" id="ant-show"> Antenna sites</label>
           <button id="open-analysis" class="link-btn" type="button">Sites vs population <span aria-hidden="true">›</span></button>
@@ -114,7 +116,8 @@
         </div>
       </section>
 
-      <section class="block">
+      <section class="block" aria-labelledby="h-data">
+        <h2 id="h-data" class="sr-only">Data options</h2>
         <div class="row between">
           <label class="lbl" for="minpop">Min. residents per hectare</label>
           <output id="minpop-out" for="minpop" class="val"></output>
@@ -126,7 +129,8 @@
         <p class="hint" id="noloc-hint"></p>
       </section>
 
-      <section class="block">
+      <section class="block" aria-labelledby="h-view">
+        <h2 id="h-view" class="sr-only">View and basemap</h2>
         <div class="row between">
           <span class="lbl">View</span>
           <div class="seg" role="radiogroup" aria-label="View">
@@ -172,10 +176,10 @@
       </section>
 
       <footer class="src">
-        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT</a> (31 Dec 2024);
-        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">Federal Office of Communications OFCOM</a>, as supplied by the operators, accuracy not guaranteed.
+        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT<span class="sr-only"> (opens in a new tab)</span></a> (31 Dec 2024);
+        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">Federal Office of Communications OFCOM<span class="sr-only"> (opens in a new tab)</span></a>, as supplied by the operators, accuracy not guaranteed.
         Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.
-        <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener">Source code</a> (AGPL-3.0).
+        <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener">Source code<span class="sr-only"> (opens in a new tab)</span></a> (AGPL-3.0).
       </footer>
     </div>
   </aside>

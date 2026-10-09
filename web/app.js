@@ -1842,7 +1842,10 @@ function renderDetail() {
 
   if (c && scope !== 'view') {
     const links = el('div', 'links');
-    const a = el('a', null, 'Open in map.geo.admin.ch ↗');
+    const a = el('a', null, 'Open in map.geo.admin.ch ');
+    const arrow = el('span', null, '↗');
+    arrow.setAttribute('aria-hidden', 'true');
+    a.append(arrow, el('span', 'sr-only', ' (opens in a new tab)'));
     a.href = `https://map.geo.admin.ch/#/map?lang=en&center=${Math.round(c[0])},${Math.round(c[1])}&z=10&layers=ch.bakom.standorte-mobilfunkanlagen`;
     a.target = '_blank';
     a.rel = 'noopener';
