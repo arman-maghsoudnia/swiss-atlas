@@ -23,19 +23,28 @@ export function squareRing(E, N, size) {
  * Point-in-area test for a (multi)polygon: polys = [[outer, ...holes], …], rings as [[x, y], …] in any
  * planar coordinates (LV95 here). Even-odd rule over all rings, so holes and enclaves are outside.
  * Returns inside(x, y), with a bounding-box shortcut, and the box [x0, y0, x1, y1].
+ * The edges are sorted into horizontal bands, so a point is tested only against the edges at its height:
+ * a lake commune has some 9,000 vertices, and a commune summary tests thousands of hectares.
  */
 export function areaTest(polys) {
-  const rings = polys.flat();
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const p of polys) for (const [x, y] of p[0]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  const nb = Math.max(1, Math.min(512, Math.ceil((y1 - y0) / 100))), h = (y1 - y0) / nb || 1;
+  const bands = Array.from({ length: nb }, () => []); // per band: xa, ya, xb, yb of each edge crossing it
+  const bandOf = (y) => Math.max(0, Math.min(nb - 1, Math.floor((y - y0) / h)));
+  for (const r of polys.flat()) {
+    for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
+      const [xa, ya] = r[j], [xb, yb] = r[k];
+      for (let b = bandOf(Math.min(ya, yb)), hi = bandOf(Math.max(ya, yb)); b <= hi; b++) bands[b].push(xa, ya, xb, yb);
+    }
+  }
   const inside = (x, y) => {
     if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+    const e = bands[bandOf(y)];
     let c = false;
-    for (const r of rings) {
-      for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
-        const [xk, yk] = r[k], [xj, yj] = r[j];
-        if ((yk > y) !== (yj > y) && x < ((xj - xk) * (y - yk)) / (yj - yk) + xk) c = !c;
-      }
+    for (let i = 0; i < e.length; i += 4) {
+      const xa = e[i], ya = e[i + 1], xb = e[i + 2], yb = e[i + 3];
+      if ((yb > y) !== (ya > y) && x < ((xa - xb) * (y - yb)) / (ya - yb) + xb) c = !c;
     }
     return c;
   };

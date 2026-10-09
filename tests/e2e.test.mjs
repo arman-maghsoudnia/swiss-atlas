@@ -306,7 +306,8 @@ async function openPage(port) {
       errors.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
     } else if (m.method === 'Fetch.requestPaused') { // geo.admin.ch: canned search and boundary answers, 503 for the rest
       const { url } = m.params.request;
-      const canned = url.includes('/SearchServer') ? (url.includes('Testwil') ? COMMUNE_SEARCH : SEARCH_RESULT) : url.includes('/identify') && url.includes('returnGeometry=true') ? COMMUNE_RESULT : null;
+      const canned = url.includes('/SearchServer') ? (url.includes('Testwil') ? COMMUNE_SEARCH : SEARCH_RESULT)
+        : url.includes('gemeinde-flaeche.fill/9999-') ? { feature: COMMUNE_RESULT.results[0] } : url.includes('/identify') && url.includes('returnGeometry=true') ? COMMUNE_RESULT : null;
       send('Fetch.fulfillRequest', {
         requestId: m.params.requestId, responseCode: canned ? 200 : 503,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],

@@ -1899,7 +1899,9 @@ function imageWithFooter(shot, k) {
   // Lay out twice: once to measure the footer, once to draw it.
   const out = document.createElement('canvas'), g = out.getContext('2d');
   g.font = font(15, 650);
-  const titleW = g.measureText(m.label).width;
+  let title = m.label; // shortened with "…" to the width (long attribute names on a phone)
+  while (title.length > 1 && g.measureText(title).width > W - 2 * pad) title = `${title.slice(0, -2).trimEnd()}…`;
+  const titleW = g.measureText(title).width;
   g.font = font(12);
   const siteRight = titleW + 24 * k + g.measureText(site).width <= W - 2 * pad; // else it ends the credits
   if (!siteRight) credits += ` · ${site}`;
@@ -1907,7 +1909,7 @@ function imageWithFooter(shot, k) {
     let y = pad + 15 * k;
     g.textBaseline = 'alphabetic';
     g.font = font(15, 650);
-    if (draw) { g.fillStyle = tok('--text-primary', '#0b0b0b'); g.fillText(m.label, pad, y); }
+    if (draw) { g.fillStyle = tok('--text-primary', '#0b0b0b'); g.fillText(title, pad, y); }
     g.font = font(12);
     if (draw && siteRight) { g.fillStyle = muted; g.textAlign = 'right'; g.fillText(site, W - pad, y); g.textAlign = 'left'; }
     y += line;
@@ -2093,6 +2095,20 @@ async function identifyCommune(E, Nn, geometry, signal) {
   }
   return null;
 }
+// A commune's boundary by its FSO number (search results carry it), for the same years as above.
+async function communeById(bfs, signal) {
+  const now = new Date().getFullYear();
+  for (const year of new Set([META.year + 1, now, now - 1])) {
+    const url = geoUrl(`https://api3.geo.admin.ch/rest/services/api/MapServer/ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill/${bfs}-${year}?`
+      + new URLSearchParams({ geometryFormat: 'geojson', sr: '2056', lang }));
+    const res = await fetch(url, { signal });
+    if (res.status === 404) continue; // no boundary for that year
+    if (!res.ok) throw new Error(`commune ${bfs}: HTTP ${res.status}`);
+    const f = (await res.json()).feature;
+    if (f?.geometry) return { ...f, attributes: f.properties };
+  }
+  return null;
+}
 const communeName = (a) => (a.gemname.includes(`(${a.kanton})`) ? a.gemname : `${a.gemname} (${a.kanton})`);
 
 // The commune scope: hectares (and antenna sites) whose centre lies inside the selection's commune.
@@ -2113,6 +2129,49 @@ function boundaryFrom(hit) {
     ll: polys.map((p) => p.map((r) => r.map(([x, y]) => lv95ToWgs(x, y)))),
   };
 }
+function keepBoundary(b) {
+  boundaries.set(b.id, b);
+  if (boundaries.size > 20) boundaries.delete(boundaries.keys().next().value);
+  return b;
+}
+// A commune picked in the search: its summary, anchored on the inhabited hectare nearest the searched
+// point that lies inside it (the nearest hectare overall can belong to a neighbour, or to France).
+async function openCommune(bfs, E, Nn) {
+  const nearest = (cells) => {
+    let best = -1, bestD = Infinity;
+    for (const j of cells) {
+      const d = (cellE(j) + 50 - E) ** 2 + (cellN(j) + 50 - Nn) ** 2;
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    return best;
+  };
+  const known = [...boundaries.values()].find((b) => b.bfs === bfs);
+  const first = nearest(known?.cells.length ? known.cells : range(0, N - 1)); // the panel opens at once
+  if (first < 0) return;
+  state.scope = 'commune';
+  if (!known) COMMUNE = { at: pointKey(cellE(first) + 50, cellN(first) + 50), status: 'loading' }; // no lookup by point meanwhile
+  selectCell(first, false);
+  if (known) return;
+  communeCtl?.abort();
+  communeCtl = new AbortController();
+  const at = COMMUNE.at;
+  try {
+    const hit = await communeById(bfs, communeCtl.signal);
+    if (COMMUNE?.at !== at || state.selected !== first) return; // another selection meanwhile
+    if (!hit) throw new Error(`commune ${bfs}: no boundary`);
+    const b = keepBoundary(boundaryFrom(hit));
+    const anchor = b.cells.length ? nearest(b.cells) : first;
+    COMMUNE = anchor === first ? { ...b, at, status: 'ok' } : null; // else selectCell below finds it in boundaries
+    if (anchor !== first) selectCell(anchor, false);
+    else if (state.scope === 'commune') { renderDetail(); render(); }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    console.warn(e);
+    if (COMMUNE?.at !== at) return;
+    COMMUNE = null; // look the commune up by the point instead
+    if (state.scope === 'commune') { renderDetail(); render(); }
+  }
+}
 function boundaryOf(E, Nn) {
   for (const b of boundaries.values()) if (b.inside(E, Nn)) return b;
   return null;
@@ -2126,7 +2185,7 @@ function ensureCommune() {
   const c = center();
   if (!c || !N) return;
   const at = pointKey(c[0], c[1]);
-  if (COMMUNE?.at === at) return;
+  if (COMMUNE?.at === at && COMMUNE.status !== 'error') return; // a failed load is tried again
   const known = boundaryOf(c[0], c[1]);
   if (known) { COMMUNE = { ...known, at, status: 'ok' }; return; }
   COMMUNE = { at, status: 'loading' };
@@ -2135,16 +2194,14 @@ function ensureCommune() {
   const done = (next) => {
     if (COMMUNE?.at !== at) return;
     COMMUNE = next;
+    if (state.scope !== 'commune') return; // left meanwhile: keep the panel (focus, scroll) as it is
     renderDetail();
     render();
     if (next.status === 'ok') announce(t('{name}: commune boundary loaded', { name: next.name }));
   };
   identifyCommune(c[0], c[1], true, communeCtl.signal).then((hit) => {
     if (!hit?.geometry) { done({ at, status: 'none' }); return; }
-    const b = boundaryFrom(hit);
-    boundaries.set(b.id, b);
-    if (boundaries.size > 20) boundaries.delete(boundaries.keys().next().value);
-    done({ ...b, at, status: 'ok' });
+    done({ ...keepBoundary(boundaryFrom(hit)), at, status: 'ok' });
   }, (e) => {
     if (e.name === 'AbortError') return;
     console.warn(e);
@@ -2609,14 +2666,9 @@ function setupSearch() {
     if (narrow()) setCollapsed(true); // the expanded panel would hide the result
     const box = /BOX\(([-\d.]+) ([-\d.]+),([-\d.]+) ([-\d.]+)\)/.exec(r.box || '');
     let open = null;
-    if (r.origin === 'gg25' && N) { // a commune: open its summary, anchored on the inhabited hectare nearest its centre
-      const [E, Nn] = wgsToLv95(r.lon, r.lat);
-      let best = -1, bestD = Infinity;
-      for (let j = 0; j < N; j++) {
-        const d = (cellE(j) + 50 - E) ** 2 + (cellN(j) + 50 - Nn) ** 2;
-        if (d < bestD) { bestD = d; best = j; }
-      }
-      if (best >= 0) { state.scope = 'commune'; selectCell(best, false); open = 'detail'; }
+    if (r.origin === 'gg25' && N && +r.id > 0) { // a commune: open its summary
+      openCommune(+r.id, ...wgsToLv95(r.lon, r.lat));
+      open = 'detail';
     }
     if (box && Math.abs(box[3] - box[1]) > 0.002) {
       const f = freeArea(open), { width, height } = map.getContainer().getBoundingClientRect();
@@ -2643,7 +2695,7 @@ function setupSearch() {
       const json = await res.json();
       results = (json.results || []).map(({ attrs }) => ({
         label: parser.parseFromString(attrs.label, 'text/html').body.textContent.replace(/\s+/g, ' ').trim(), // has <b>/<i>, line breaks
-        origin: attrs.origin, lat: attrs.lat, lon: attrs.lon, box: attrs.geom_st_box2d,
+        origin: attrs.origin, lat: attrs.lat, lon: attrs.lon, box: attrs.geom_st_box2d, id: attrs.featureId,
       }));
       resultsFor = q;
       active = results.length ? 0 : -1;
