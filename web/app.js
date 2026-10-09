@@ -791,6 +791,9 @@ const fitCanvas = () => {
   if (c.clientWidth !== box.clientWidth || c.clientHeight !== box.clientHeight) map.resize();
 };
 addEventListener('resize', fitCanvas);
+// MapLibre logs errors only when nobody listens; tile requests cancelled by quick zooming or a basemap
+// switch surface as AbortErrors, which are expected and not worth a console error.
+map.on('error', (e) => { if (e.error?.name !== 'AbortError') console.error(e.error ?? e); });
 document.addEventListener('visibilitychange', fitCanvas);
 
 const overlay = new deck.MapboxOverlay({ interleaved: true, layers: [], onHover, onClick });
