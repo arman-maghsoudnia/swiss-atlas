@@ -114,6 +114,7 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     // smooth heatmap, columns, terrain (fails offline and falls back to the flat map)
     await ev(`document.getElementById('smooth').click()`);
     assert.ok(await page.waitFor(`!!document.querySelector('#legend .gradient')`, 20_000));
+    assert.ok(await page.waitFor(`/fades where few hectares/.test(document.getElementById('res-note').textContent)`, 30_000), 'smoothed surface');
     await ev(`document.getElementById('smooth').click()`);
     await ev(`document.querySelector('[data-view="3d"]').click()`);
     assert.equal(await ev(`document.querySelector('[data-view][aria-checked="true"]').dataset.view`), '3d');

@@ -663,8 +663,9 @@ function paint() {
   if (isTerrain() && !state.smooth) {
     res.textContent = 'Distant areas use coarser blocks (up to 2 km); counts are averaged per inhabited hectare.';
   } else if (state.smooth) {
-    res.textContent = 'Counts are averaged per inhabited hectare; the surface fades where few hectares are inhabited.';
-    computeSmooth();
+    res.textContent = computeSmooth() || CLASSES.m.kind === 'class'
+      ? 'Counts are averaged per inhabited hectare; the surface fades where few hectares are inhabited.'
+      : 'Smoothing the surface…';
   } else {
     res.textContent = g.s === 100 ? `Showing 100 m hectares. ${press} one for details.`
       : CLASSES.m.kind === 'class' ? 'This attribute is shown at 100 m only. Zoom in.'
@@ -678,6 +679,26 @@ function paint() {
 let SMOOTH = null; // { key, surface, rgba, tiles, value(p), alpha(p) }
 let SURF = null;   // { key, s }: blurred layers, which depend only on the metric and sigma (the slow part)
 let smoothVersion = 0;
+// The blur runs in a worker when possible; until it answers, the map shows the hectares.
+let smoothWorker = null, workerJob = 0, workerKey = null;
+try {
+  smoothWorker = new Worker(new URL('smooth-worker.js', import.meta.url), { type: 'module' });
+  smoothWorker.onerror = (e) => { console.warn('smoothing worker failed; smoothing on the main thread', e); smoothWorker = null; workerKey = null; paint(); };
+  smoothWorker.onmessage = ({ data }) => {
+    if (data.id !== workerJob) return; // a newer request is under way
+    const key = workerKey;
+    workerKey = null;
+    if (!state.smooth) return; // switched off meanwhile: drop the ~150 MB result
+    SURF = { key, s: data.surface };
+    paint();
+  };
+} catch { /* no module workers: smooth on the main thread */ }
+function blurLayers(m) {
+  const { num, den } = baseParts(m);
+  const layers = { num, den, sup: inhabitedIndicator() };
+  if (isRate(m)) layers.pop = Float32Array.from(col('BBTOT'));
+  return layers;
+}
 function computeSmooth() {
   const { m, breaks, ramp } = CLASSES;
   const key = [metricKey(m), state.sigma, state.minPop, basemapDark(), breaks.join(',')].join('|');
@@ -688,11 +709,21 @@ function computeSmooth() {
   const surfKey = `${metricKey(m)}|${state.sigma}`;
   if (SURF?.key !== surfKey) {
     SURF = null; // let the old surface go before allocating the new one
-    const { num, den } = baseParts(m);
-    const layers = { num, den, sup: inhabitedIndicator() };
-    if (rate) layers.pop = Float32Array.from(col('BBTOT'));
+    SMOOTH = null; // never show a surface for other settings meanwhile
+    if (smoothWorker) {
+      if (workerKey !== surfKey) {
+        if (workerJob === 0) { // first job: the hectare centres, once
+          const E = new Float64Array(N), Nn = new Float64Array(N);
+          for (let i = 0; i < N; i++) { E[i] = cellE(i) + 50; Nn[i] = cellN(i) + 50; }
+          smoothWorker.postMessage({ centres: { E, N: Nn } }, [E.buffer, Nn.buffer]);
+        }
+        workerKey = surfKey;
+        smoothWorker.postMessage({ id: ++workerJob, layers: blurLayers(m), bbox: BBOX, sigma: state.sigma });
+      }
+      return null;
+    }
     const pts = { n: N, E: (i) => cellE(i) + 50, N: (i) => cellN(i) + 50 };
-    SURF = { key: surfKey, s: blurSurface(pts, layers, BBOX, state.sigma) };
+    SURF = { key: surfKey, s: blurSurface(pts, blurLayers(m), BBOX, state.sigma) };
   }
   const s = SURF.s;
   const perCell = (s.cell / 100) ** 2;                       // hectares per raster cell

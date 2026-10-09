@@ -107,6 +107,7 @@ web/index.html             page shell
 web/app.js                 main module: state, metrics, classification, map layers, panels, search
 web/antennas.js            antenna loading, filters, spatial index, nearest-site search, marker shapes
 web/smooth.js              kernel smoothing (rasterise, Gaussian blur, georeferenced tiles)
+web/smooth-worker.js       runs the blur in a Web Worker so the map stays responsive
 web/analysis.js            correlation statistics, distance curve and scatter chart
 web/terrain.js             swisstopo terrain, on-demand population tiles for draping, antenna marker images
 web/remote.js              routes swisstopo URLs through the caching proxy when it is available
