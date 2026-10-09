@@ -40,8 +40,16 @@ export function t(key, vars) {
 // Singular or plural by the language's rules (French counts 0 as singular); {n} is the formatted count.
 const plurals = new Intl.PluralRules(locale);
 export const tp = (n, one, other, vars) => t(isOne(n) ? one : other, { n: fmtInt(n), ...vars });
-/** Whether n takes the singular: 1 in English, German and Italian; also 0 and 1.8 in French. */
-export const isOne = (n) => plurals.select(n) === 'one';
+const pluralsFixed = new Map();
+/**
+ * Whether n takes the singular: 1 in English, German and Italian; also 0 and 1.8 in French. With
+ * decimals, as shown with that many digits: "1.00" is plural in English ("1.00 persons").
+ */
+export function isOne(n, decimals = 0) {
+  let p = decimals ? pluralsFixed.get(decimals) : plurals;
+  if (!p) pluralsFixed.set(decimals, (p = new Intl.PluralRules(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })));
+  return p.select(n) === 'one';
+}
 
 const intFmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
 export const fmtInt = (v) => intFmt.format(v);

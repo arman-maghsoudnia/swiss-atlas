@@ -58,7 +58,7 @@ export default {
   "Any of the 77 attributes…": "Eines der 77 Merkmale…",
   "{label} (FSO code {code}).": "{label} (BFS-Code {code}).",
   "{label} per hectare": "{label} (pro Hektare)",
-  "{label} per hectare (FSO code {code}).": "{label} pro Hektare (BFS-Code {code}).",
+  "{label} per hectare (FSO code {code}).": "{label} (pro Hektare; BFS-Code {code}).",
   "{label} (% of households)": "{label} (% der Haushalte)",
   "{label} (% of residents)": "{label} (% der Einwohnenden)",
   "{label} as a share of all private households (FSO code {code}).": "{label} als Anteil aller Privathaushalte (BFS-Code {code}).",

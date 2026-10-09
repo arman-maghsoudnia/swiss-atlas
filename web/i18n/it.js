@@ -425,7 +425,7 @@ export default {
   "A year ago: another canton": "Un anno prima: altro cantone",
   "A year ago: abroad": "Un anno prima: all’estero",
   "A year ago: not yet born": "Un anno prima: non ancora nati",
-  "A year ago: unknown": "Un anno prima: sconosciuto",
+  "A year ago: unknown": "Un anno prima: senza indicazione",
   "Private households, total": "Economie domestiche private, totale",
   "Households of 1 person": "Economie domestiche di 1 persona",
   "Households of 2 persons": "Economie domestiche di 2 persone",

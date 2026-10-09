@@ -560,14 +560,14 @@ function computeBreaks(m, values, valid) {
 
 // A unit after the value v, in the language's singular or plural ("1,8 personne" in French, "1.8 persons").
 const UNIT_ONE = { years: 'year', persons: 'person' };
-const unitOf = (m, v) => (m.unit === 'm' ? 'm' : t(isOne(v) ? UNIT_ONE[m.unit] : m.unit));
+const unitOf = (m, v, decimals) => (m.unit === 'm' ? 'm' : t(isOne(v, decimals) ? UNIT_ONE[m.unit] : m.unit));
 function fmtValue(m, v, digits) {
   if (Number.isNaN(v)) return '–';
   if (m.kind === 'share' || m.kind === 'diverging') {
     const pc = v * 100;
     return fmtPct(v, digits ?? (pc < 1 && pc > 0 ? 1 : pc < 10 && pc % 1 ? 1 : 0));
   }
-  if (m.kind === 'value') return m.unit === 'm' ? fmtM(v) : `${fmtFixed(v, digits ?? m.decimals)} ${unitOf(m, v)}`;
+  if (m.kind === 'value') return m.unit === 'm' ? fmtM(v) : `${fmtFixed(v, digits ?? m.decimals)} ${unitOf(m, v, digits ?? m.decimals)}`;
   return nf.format(v);
 }
 // A class boundary with its unit: 12.5%, 4, 1’500 m, 2.4 persons.
@@ -1703,7 +1703,7 @@ function syncControls() {
     radios.forEach((r) => { r.tabIndex = r === on ? 0 : -1; });
   });
   $('sigma').setAttribute('aria-valuetext', fmtM(state.sigma));
-  $('exag').setAttribute('aria-valuetext', tp(state.exaggeration, '{n} time', '{n} times', { n: fmtFixed(state.exaggeration, 1) }));
+  $('exag').setAttribute('aria-valuetext', t(isOne(state.exaggeration, 1) ? '{n} time' : '{n} times', { n: fmtFixed(state.exaggeration, 1) })); // "1.0 times"
   $('opacity').setAttribute('aria-valuetext', fmtPct(state.opacity));
   $('dim').setAttribute('aria-valuetext', fmtPct(state.dim));
 }
