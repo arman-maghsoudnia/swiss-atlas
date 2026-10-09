@@ -9,6 +9,24 @@ import { terrainSource, registerTileProtocol, antennaImages } from './terrain.js
 import { detectProxy, geoUrl, transformRequest } from './remote.js';
 
 const $ = (id) => document.getElementById(id);
+
+// A message in place of the loading card when the map cannot start.
+function showFatal(...parts) {
+  $('panel').removeAttribute('aria-busy');
+  const box = $('loading');
+  if (!box) return;
+  box.classList.add('error');
+  const msg = $('loading-msg');
+  msg.setAttribute('role', 'alert');
+  msg.replaceChildren(...parts);
+}
+{
+  const problem = !window.maplibregl || !window.deck ? 'The map libraries did not load. Check your connection and reload the page.'
+    : !document.createElement('canvas').getContext('webgl2') ? 'This map needs WebGL 2, which this browser or device does not provide. Try an up-to-date Chrome, Firefox, Safari or Edge with hardware acceleration turned on.'
+      : typeof DecompressionStream === 'undefined' ? 'This browser is too old for the map (it needs DecompressionStream: Chrome 80, Firefox 113, Safari 16.4 or newer).'
+        : null;
+  if (problem) { showFatal(problem); throw new Error(problem); }
+}
 const nf = new Intl.NumberFormat('de-CH');
 const pad2 = (i) => String(i).padStart(2, '0');
 const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
@@ -2127,14 +2145,8 @@ function setupSearch() {
     await loadData();
     A = await antP;
   } catch (e) {
-    const box = $('loading');
-    box.classList.add('error');
-    $('panel').removeAttribute('aria-busy');
-    const msg = $('loading-msg');
-    msg.setAttribute('role', 'alert');
-    msg.textContent = '';
-    if (e.message === 'file') msg.append('Open this page through the local server: run ', el('code', null, 'python3 serve.py'), ' from the repository root.');
-    else msg.append('Could not load the population data. Reload the page; if you run it locally, start ', el('code', null, 'python3 serve.py'), ' from the repository root.');
+    if (e.message === 'file') showFatal('Open this page through the local server: run ', el('code', null, 'python3 serve.py'), ' from the repository root.');
+    else showFatal('Could not load the population data. Reload the page; if you run it locally, start ', el('code', null, 'python3 serve.py'), ' from the repository root.');
     console.error(e);
     return;
   }
