@@ -12,23 +12,21 @@
   <script src="vendor/deck.gl.min.js"></script>
 </head>
 <body>
-  <div id="map"></div>
-
   <aside id="panel" class="card" aria-label="Map controls">
     <header class="panel-head">
       <div>
         <h1>Swiss atlas</h1>
         <p class="sub" id="subtitle">Population per hectare</p>
       </div>
-      <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" title="Collapse panel">
+      <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" aria-label="Map controls" title="Collapse panel">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </header>
 
     <div id="panel-body">
       <div class="search">
-        <input id="search" type="search" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
-        <ul id="search-results" role="listbox" hidden></ul>
+        <input id="search" type="search" role="combobox" aria-expanded="false" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
+        <ul id="search-results" role="listbox" aria-label="Search results" hidden></ul>
       </div>
 
       <div class="kpis">
@@ -36,6 +34,7 @@
         <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l">inhabited ha</span></div>
         <div class="kpi"><span class="kpi-v" id="kpi-ant">–</span><span class="kpi-l">antenna sites</span></div>
       </div>
+      <button id="sum-view" type="button" class="link-btn">Summarise this view <span aria-hidden="true">›</span></button>
 
       <section class="block">
         <label class="lbl" for="metric">Colour by</label>
@@ -48,14 +47,14 @@
           </div>
         </div>
         <p class="hint" id="metric-desc"></p>
-        <div id="legend" class="legend" aria-live="polite"></div>
+        <div id="legend" class="legend"></div>
         <p class="hint" id="res-note"></p>
       </section>
 
       <section class="block" id="ant-block">
         <div class="row between">
           <label class="check strong"><input type="checkbox" id="ant-show"> Antenna sites</label>
-          <button id="open-analysis" class="link-btn" type="button">Sites vs population ›</button>
+          <button id="open-analysis" class="link-btn" type="button">Sites vs population <span aria-hidden="true">›</span></button>
         </div>
         <div id="ant-body">
           <div class="ops" id="ant-ops" role="group" aria-label="Operators"></div>
@@ -156,7 +155,7 @@
     </div>
   </aside>
 
-  <aside id="detail" class="card" aria-label="Selection details" hidden>
+  <aside id="detail" class="card" aria-label="Selection details" tabindex="-1" hidden>
     <header class="panel-head">
       <div>
         <h2 id="d-title">Hectare</h2>
@@ -184,7 +183,7 @@
     <div id="d-body"></div>
   </aside>
 
-  <aside id="analysis" class="card" aria-label="Antenna sites vs population" hidden>
+  <aside id="analysis" class="card" aria-label="Antenna sites vs population" tabindex="-1" hidden>
     <header class="panel-head">
       <div>
         <h2>Antenna sites vs population</h2>
@@ -197,11 +196,14 @@
     <div id="a-body"></div>
   </aside>
 
-  <div id="tooltip" role="status" hidden></div>
+  <div id="map"></div>
+
+  <div id="tooltip" aria-hidden="true" hidden></div>
+  <p id="sr-status" class="sr-only" role="status"></p>
 
   <div id="loading" class="card">
-    <p id="loading-msg">Loading population data…</p>
-    <div class="bar"><div id="loading-bar"></div></div>
+    <p id="loading-msg" role="status">Loading population data…</p>
+    <div class="bar" role="progressbar" aria-label="Loading population data" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loading-bar"></div></div>
   </div>
 
   <script type="module" src="app.js"></script>

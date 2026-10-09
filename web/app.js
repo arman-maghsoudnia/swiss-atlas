@@ -96,6 +96,10 @@ let META, N, M, E_IDX, N_IDX, POS, CENTER, BBOX, BBOX_LL, NOLOC_IDX;
 const RAW = {}, NOLOC = {}, NOLOC_OF = new Map(), CELL_OF = new Map(), ADJ = {};
 let COLORS, ELEV, CLASS, CELL_DATA;
 
+function setProgress(pc) {
+  $('loading-bar').style.width = `${pc}%`;
+  $('loading-bar').parentElement.setAttribute('aria-valuenow', String(Math.round(pc)));
+}
 async function loadData() {
   if (location.protocol === 'file:') throw new Error('file');
   const metaRes = await fetch('data/meta.json', { cache: 'no-cache' });
@@ -112,7 +116,7 @@ async function loadData() {
     if (done) break;
     chunks.push(value);
     got += value.byteLength;
-    if (total) $('loading-bar').style.width = `${Math.min(100, (got / total) * 90)}%`;
+    if (total) setProgress(Math.min(100, (got / total) * 90));
   }
   let blob = new Blob(chunks);
   const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
@@ -121,7 +125,7 @@ async function loadData() {
     blob = await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).blob();
   }
   const buf = await blob.arrayBuffer();
-  $('loading-bar').style.width = '100%';
+  setProgress(100);
   parse(buf);
 }
 
@@ -577,6 +581,12 @@ const map = new maplibregl.Map({
   maxBounds: [[2.5, 43], [14, 50.6]], // tall enough for a portrait phone to show the whole country
   hash: 'map',
   attributionControl: false,
+  locale: { 'Map.Title': 'Map. Arrow keys pan, plus and minus zoom; Enter selects the hectare at the centre.' },
+});
+map.getCanvas().addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !CLASSES) return;
+  const c = map.getCenter(), i = cellAt(...wgsToLv95(c.lng, c.lat));
+  if (i >= 0) { e.preventDefault(); selectCell(i); } else announce('No residents at the map centre.');
 });
 map.setStyle(styleFor(state.basemap), { transformStyle: boundRasters });
 map.addControl(new maplibregl.AttributionControl({
@@ -775,8 +785,10 @@ function el(tag, cls, text) {
   if (text != null) e.textContent = text;
   return e;
 }
+const announce = (msg) => { $('sr-status').textContent = msg; }; // screen readers (one polite live region)
 const fmtCount = (v, cell) => (cell && v === 3 ? '1–3' : nf.format(Math.round(v)));
 const blockLabel = (s) => (s >= 1000 ? `${s / 1000} km` : `${s} m`);
+const shortOp = (label) => label.replace(' (railway GSM-R)', '').replace('German networks (border)', 'German (border)');
 
 function antennaSummary(i) {
   return [A.name[i], `${A.operatorLabels[A.op[i]]} · ${A.types[A.type[i]]}`,
@@ -1131,7 +1143,12 @@ function renderLegend() {
     const sw = el('span', 'sw');
     sw.style.background = `rgb(${ramp[k].join(',')})`;
     b.append(sw, el('span', 'rng', label), el('span', 'cnt', `${nf.format(counts[k])} ha`));
-    b.addEventListener('click', () => { state.isolate = state.isolate === k ? null : k; bumpColors(); renderLegend(); paint(); });
+    b.addEventListener('click', () => {
+      state.isolate = state.isolate === k ? null : k;
+      bumpColors(); renderLegend(); paint();
+      $('legend').querySelectorAll('button.legend-row')[k]?.focus(); // the rows were rebuilt
+      announce(state.isolate === null ? 'Showing all classes' : `Showing only ${label}: ${nf.format(counts[k])} hectares`);
+    });
     box.append(b);
   });
   if (naCount && !state.smooth) {
@@ -1276,7 +1293,7 @@ function buildControls() {
       cb.addEventListener('change', () => { state.ant.ops[k] = cb.checked; antennasChanged(); });
       const count = el('small');
       count.dataset.op = k;
-      lab.append(cb, ` ${label.replace(' (railway GSM-R)', '').replace('German networks (border)', 'German (border)')} `, count);
+      lab.append(cb, ` ${shortOp(label)} `, count);
       lab.title = label;
       ops.append(lab);
     });
@@ -1323,10 +1340,10 @@ function buildControls() {
   height.addEventListener('input', () => { state.heightScale = +height.value; syncControls(); render(); saveSettings(); });
   const opacity = $('opacity');
   opacity.value = state.opacity;
-  opacity.addEventListener('input', () => { state.opacity = +opacity.value; render(); saveSettings(); });
+  opacity.addEventListener('input', () => { state.opacity = +opacity.value; syncControls(); render(); saveSettings(); });
   const dim = $('dim');
   dim.value = state.dim;
-  dim.addEventListener('input', () => { state.dim = +dim.value; applyDim(); saveSettings(); });
+  dim.addEventListener('input', () => { state.dim = +dim.value; syncControls(); applyDim(); saveSettings(); });
   const basemap = $('basemap');
   basemap.value = state.basemap;
   basemap.addEventListener('change', () => setBasemap(basemap.value));
@@ -1343,12 +1360,25 @@ function buildControls() {
   radius.value = String(state.radiusKm);
   radius.addEventListener('change', () => { state.radiusKm = +radius.value; renderDetail(); render(); saveSettings(); });
   const kpis = document.querySelector('.kpis');
-  kpis.addEventListener('click', () => { state.scope = 'view'; openDetail(); });
+  const summariseView = () => { state.scope = 'view'; openDetail(); };
+  kpis.addEventListener('click', summariseView);
+  $('sum-view').addEventListener('click', summariseView);
   kpis.title = 'Summarise the current map view';
   kpis.style.cursor = 'pointer';
 
+  document.querySelectorAll('.seg[role="radiogroup"]').forEach((g) => g.addEventListener('keydown', (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    const radios = [...g.querySelectorAll('[role="radio"]:not(:disabled)')], k = radios.indexOf(document.activeElement);
+    if (k < 0) return;
+    e.preventDefault();
+    const next = radios[(k + d + radios.length) % radios.length];
+    next.focus();
+    next.click();
+  }));
   addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (!tip.hidden) { hideTip(); return; } // first Escape dismisses a tooltip
     if (!$('detail').hidden) closeDetail(); else if (!$('analysis').hidden) closeAnalysis();
   });
   syncControls();
@@ -1380,6 +1410,16 @@ function syncControls() {
   if ($('ant-body')) $('ant-body').hidden = !state.ant.show;
   document.querySelector('[data-scope="cell"]').disabled = state.selected < 0;
   document.querySelector('[data-scope="radius"]').disabled = !center();
+  // Radio groups take one Tab stop (the checked option); arrow keys move within (see buildControls).
+  document.querySelectorAll('.seg[role="radiogroup"]').forEach((g) => {
+    const radios = [...g.querySelectorAll('[role="radio"]')];
+    const on = radios.find((r) => r.getAttribute('aria-checked') === 'true' && !r.disabled) || radios.find((r) => !r.disabled);
+    radios.forEach((r) => { r.tabIndex = r === on ? 0 : -1; });
+  });
+  $('sigma').setAttribute('aria-valuetext', fmtM(state.sigma));
+  $('exag').setAttribute('aria-valuetext', `${state.exaggeration.toFixed(1)} times`);
+  $('opacity').setAttribute('aria-valuetext', `${Math.round(state.opacity * 100)}%`);
+  $('dim').setAttribute('aria-valuetext', `${Math.round(state.dim * 100)}%`);
 }
 
 function refresh() {
@@ -1473,6 +1513,7 @@ function aggregate(indices) {
 function setCollapsed(collapsed) {
   $('panel').classList.toggle('collapsed', collapsed);
   $('collapse').setAttribute('aria-expanded', String(!collapsed));
+  $('collapse').title = collapsed ? 'Expand panel' : 'Collapse panel';
 }
 // On phones the detail/analysis sheet covers the lower half: fold the panel away and, if the selection
 // is now hidden, move the map so it sits in the visible strip above the sheet.
@@ -1485,16 +1526,36 @@ function makeRoomFor(sheet) {
   const top = $('panel').getBoundingClientRect().bottom + 8, bottom = $(sheet).getBoundingClientRect().top - 8;
   if (p.y < top || p.y > bottom) map.panBy([0, p.y - (top + bottom) / 2], { duration: 400 });
 }
+// Focus: a panel opened from a control (search, buttons) takes focus and gives it back on close;
+// one opened by clicking the map leaves focus alone.
+let returnFocus = null;
+function takeFocus(id) {
+  const a = document.activeElement;
+  if (a && a !== document.body && a !== map.getCanvas() && !$(id).contains(a)) {
+    returnFocus = a;
+    $(id).focus({ preventScroll: true });
+  }
+}
+function giveBackFocus(id) {
+  if (!$(id).contains(document.activeElement)) return;
+  const back = returnFocus?.isConnected && returnFocus.getClientRects().length ? returnFocus : map.getCanvas();
+  queueMicrotask(() => back.focus({ preventScroll: true }));
+}
+const syncSide = () => document.body.classList.toggle('side-open', !$('detail').hidden || !$('analysis').hidden);
 function openDetail() {
   $('analysis').hidden = true;
   $('detail').hidden = false;
+  syncSide();
   syncControls();
   renderDetail();
   render();
   makeRoomFor('detail');
+  takeFocus('detail');
 }
 function closeDetail() {
+  giveBackFocus('detail');
   $('detail').hidden = true;
+  syncSide();
   state.selected = -1;
   state.antenna = -1;
   lookupCtl?.abort();
@@ -1667,7 +1728,8 @@ function antennaSection(sums, isCell) {
     track.append(fill);
     const val = el('div', 'bv', nf.format(byOp[k]));
     if (sites.length) { val.append(' '); val.append(el('small', null, `${Math.round((byOp[k] / sites.length) * 100)}%`)); }
-    r.append(el('div', 'bl', label), track, val);
+    r.title = label;
+    r.append(el('div', 'bl', shortOp(label)), track, val);
     wrap.append(r);
   });
   return wrap;
@@ -1754,6 +1816,21 @@ function pyramid(sums, isCell) {
   mk('text', { x: side + mid, y: yAxis, 'text-anchor': 'start' }, '0');
   mk('text', { x: W, y: yAxis, 'text-anchor': 'end' }, fmtCount(max, false));
   wrap.append(svg);
+  const more = el('details', 'pyr-table');
+  more.append(el('summary', null, 'Age bands as a table'));
+  const table = el('table', 'data');
+  const head = el('tr');
+  for (const h of ['Age', 'Men', 'Women']) { const th = el('th', null, h); th.scope = 'col'; head.append(th); }
+  table.append(head);
+  for (let k = bands - 1; k >= 0; k--) {
+    const row = el('tr');
+    const th = el('th', null, META.ageBands[k]);
+    th.scope = 'row';
+    row.append(th, el('td', null, fmtCount(men[k], isCell)), el('td', null, fmtCount(women[k], isCell)));
+    table.append(row);
+  }
+  more.append(table);
+  wrap.append(more);
   return wrap;
 }
 
@@ -1782,12 +1859,16 @@ function openAnalysis() {
   state.selected = -1;
   state.antenna = -1;
   $('analysis').hidden = false;
+  syncSide();
   renderAnalysis();
   render();
   if (narrow()) setCollapsed(true);
+  takeFocus('analysis');
 }
 function closeAnalysis() {
+  giveBackFocus('analysis');
   $('analysis').hidden = true;
+  syncSide();
   state.hoverBlock = null;
   render();
 }
@@ -1832,16 +1913,23 @@ function renderAnalysis() {
   const tbody = el('tbody');
   for (const s of SCALES) {
     const r = R.byScale[s];
-    const tr = el('tr');
-    tr.setAttribute('aria-selected', String(s === state.analysisScale));
-    tr.tabIndex = 0;
-    tr.append(el('td', null, blockLabel(s)), el('td', null, nf.format(r.n)), el('td', null, r.rho.toFixed(2)), el('td', null, r.r.toFixed(2)));
-    const pick = () => { state.analysisScale = s; saveSettings(); renderAnalysis(); };
+    const tr = el('tr', s === state.analysisScale ? 'sel' : null);
+    tr.dataset.scale = s;
+    const btn = el('button', 'row-pick', blockLabel(s));
+    btn.type = 'button';
+    btn.setAttribute('aria-pressed', String(s === state.analysisScale));
+    const first = el('td');
+    first.append(btn);
+    tr.append(first, el('td', null, nf.format(r.n)), el('td', null, r.rho.toFixed(2)), el('td', null, r.r.toFixed(2)));
+    const pick = () => {
+      state.analysisScale = s; saveSettings(); renderAnalysis();
+      $('a-body').querySelector(`tr[data-scale="${s}"] button`)?.focus(); // the table was rebuilt
+    };
     tr.addEventListener('click', pick);
-    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
     tbody.append(tr);
   }
-  table.append(thead, tbody);
+  const caption = el('caption', 'sr-only', 'Correlation by grid size; choose a size to plot it');
+  table.append(caption, thead, tbody);
   s2.append(table);
   s2.append(el('p', 'note', 'Residents vs sites per grid cell; cells with neither are left out. Larger cells correlate more strongly. Click a row to plot it.'));
   body.append(s2);
@@ -1873,21 +1961,27 @@ const ORIGIN = { zipcode: 'Postcode', gg25: 'Commune', district: 'District', kan
 function setupSearch() {
   const input = $('search'), list = $('search-results');
   let results = [], resultsFor = '', active = -1, timer = 0, ctl = null, pickFirst = false;
-  const close = () => { list.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); };
+  const close = () => { list.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); };
   const cancel = () => { clearTimeout(timer); ctl?.abort(); pickFirst = false; }; // drop pending searches
   const parser = new DOMParser(); // inert: unlike innerHTML, it never loads images or runs handlers
   const paintList = () => {
     list.replaceChildren();
     results.forEach((r, k) => {
       const li = el('li');
+      li.id = `search-opt-${k}`;
       li.setAttribute('role', 'option');
       li.setAttribute('aria-selected', String(k === active));
+      li.setAttribute('aria-label', `${r.label}, ${ORIGIN[r.origin] || r.origin}`);
       li.append(el('span', null, r.label), el('span', 'kind', ORIGIN[r.origin] || r.origin));
       li.addEventListener('mousedown', (e) => { e.preventDefault(); choose(k); });
       list.append(li);
     });
     list.hidden = !results.length;
     input.setAttribute('aria-expanded', String(!!results.length));
+    if (active >= 0 && results.length) {
+      input.setAttribute('aria-activedescendant', `search-opt-${active}`);
+      list.children[active].scrollIntoView({ block: 'nearest' });
+    } else input.removeAttribute('aria-activedescendant');
   };
   const choose = (k) => {
     const r = results[k];
@@ -1921,7 +2015,9 @@ function setupSearch() {
       }));
       resultsFor = q;
       active = results.length ? 0 : -1;
-      if (pickFirst) { pickFirst = false; choose(0); } else paintList();
+      if (pickFirst) { pickFirst = false; choose(0); return; }
+      paintList();
+      announce(results.length ? `${results.length} results; use the up and down arrow keys` : 'No places found');
     } catch (e) {
       if (e.name !== 'AbortError') { results = []; resultsFor = q; pickFirst = false; paintList(); }
     }
@@ -1939,13 +2035,14 @@ function setupSearch() {
       const q = input.value.trim();
       if (q === resultsFor) choose(active < 0 ? 0 : active);
       else if (q.length >= 2) { cancel(); pickFirst = true; search(q); } // results are for an older query: wait
-    } else if (e.key === 'Escape') { cancel(); close(); }
+    } else if (e.key === 'Escape') { if (!list.hidden) e.stopPropagation(); cancel(); close(); }
   });
   input.addEventListener('blur', () => { cancel(); setTimeout(close, 100); });
 }
 
 // ---------------------------------------------------------------- boot
 (async () => {
+  $('panel').setAttribute('aria-busy', 'true');
   try {
     const antP = loadAntennas();
     await loadData();
@@ -1953,7 +2050,9 @@ function setupSearch() {
   } catch (e) {
     const box = $('loading');
     box.classList.add('error');
+    $('panel').removeAttribute('aria-busy');
     const msg = $('loading-msg');
+    msg.setAttribute('role', 'alert');
     msg.textContent = '';
     if (e.message === 'file') msg.append('Open this page through the local server: run ', el('code', null, 'python3 serve.py'), ' from the repository root.');
     else msg.append('Could not load the population data. Reload the page; if you run it locally, start ', el('code', null, 'python3 serve.py'), ' from the repository root.');
@@ -1977,6 +2076,7 @@ function setupSearch() {
   if (isTerrain()) { map.setMaxPitch(80); if (styleReady) installTerrain(); } // otherwise style.load installs it
   updateViewStats();
   $('loading').remove();
+  $('panel').removeAttribute('aria-busy');
 })();
 
 async function loadAntennas() {
