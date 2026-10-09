@@ -1,0 +1,5 @@
+No caching proxy here.
+
+web/remote.js probes geo/health: serve.py and the nginx deployment answer it themselves with 204 and
+proxy swisstopo under geo/. On a plain static host (e.g. GitHub Pages) this file answers instead
+(200, so the app requests swisstopo directly), which avoids a 404 in the browser console.

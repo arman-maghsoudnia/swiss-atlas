@@ -30,8 +30,9 @@ export const PALETTE = {
   dark: ['#c98500', '#d55181', '#008300', '#898781'],
 };
 
-export async function loadAntennas(url) {
-  const res = await fetch(url, { cache: 'no-cache' });
+/** @param source a URL, or a fetch() promise already under way */
+export async function loadAntennas(source) {
+  const res = await (typeof source === 'string' ? fetch(source, { cache: 'no-cache' }) : source);
   if (!res.ok) return null;
   const j = await res.json();
   const n = j.count;

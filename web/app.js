@@ -93,38 +93,44 @@ function saveSettings() {
 
 // ---------------------------------------------------------------- data
 let META, N, M, E_IDX, N_IDX, POS, CENTER, BBOX, BBOX_LL, NOLOC_IDX;
-const RAW = {}, NOLOC = {}, NOLOC_OF = new Map(), CELL_OF = new Map(), ADJ = {};
+const RAW = {}, NOLOC = {}, NOLOC_OF = new Map(), ADJ = {};
+let CELL_OF; // (E index × 65536 + N index) -> hectare, see cellIndex()
 let COLORS, ELEV, CLASS, CELL_DATA;
 
 function setProgress(pc) {
   $('loading-bar').style.width = `${pc}%`;
   $('loading-bar').parentElement.setAttribute('aria-valuenow', String(Math.round(pc)));
 }
+// index.html starts these downloads before the libraries load (window.SPG_FETCH).
+const early = (name, url) => window.SPG_FETCH?.[name] ?? fetch(url, { cache: 'no-cache' });
 async function loadData() {
   if (location.protocol === 'file:') throw new Error('file');
-  const metaRes = await fetch('data/meta.json', { cache: 'no-cache' });
-  if (!metaRes.ok) throw new Error('missing');
+  const [metaRes, res] = await Promise.all([early('meta', 'data/meta.json'), early('cells', 'data/cells.bin.gz')]);
+  if (!metaRes.ok || !res.ok) throw new Error('missing');
   META = await metaRes.json();
-  const res = await fetch('data/cells.bin.gz', { cache: 'no-cache' });
-  if (!res.ok) throw new Error('missing');
   const total = +res.headers.get('content-length') || 0;
   const reader = res.body.getReader();
-  const chunks = [];
+  const head = [];
   let got = 0;
-  for (;;) {
+  while (got < 2) { // enough bytes to recognise gzip
     const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
+    if (done) throw new Error('missing');
+    head.push(value);
     got += value.byteLength;
-    if (total) setProgress(Math.min(100, (got / total) * 90));
   }
-  let blob = new Blob(chunks);
-  const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
-  if (head[0] === 0x1f && head[1] === 0x8b) { // not yet decoded by the server/browser
-    $('loading-msg').textContent = 'Decompressing…';
-    blob = await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).blob();
-  }
-  const buf = await blob.arrayBuffer();
+  // Decompress while the rest downloads (no intermediate Blobs).
+  const body = new ReadableStream({
+    start(c) { head.forEach((chunk) => c.enqueue(chunk)); },
+    async pull(c) {
+      const { done, value } = await reader.read();
+      if (done) { c.close(); return; }
+      got += value.byteLength;
+      if (total) setProgress(Math.min(99, (got / total) * 100));
+      c.enqueue(value);
+    },
+  });
+  const gz = head[0][0] === 0x1f && (head[0][1] ?? head[1][0]) === 0x8b; // not already decoded by the server
+  const buf = await new Response(gz ? body.pipeThrough(new DecompressionStream('gzip')) : body).arrayBuffer();
   setProgress(100);
   parse(buf);
 }
@@ -148,13 +154,41 @@ function parse(buf) {
     const sw = lv95ToWgs(E, Nn), c = lv95ToWgs(E + 50, Nn + 50);
     POS[2 * i] = sw[0]; POS[2 * i + 1] = sw[1];
     CENTER[2 * i] = c[0]; CENTER[2 * i + 1] = c[1];
-    CELL_OF.set(E_IDX[i] * 65536 + N_IDX[i], i);
     BBOX[0] = Math.min(BBOX[0], E); BBOX[1] = Math.min(BBOX[1], Nn);
     BBOX[2] = Math.max(BBOX[2], E + 100); BBOX[3] = Math.max(BBOX[3], Nn + 100);
   }
+  CELL_OF = cellIndex();
   const corners = [[BBOX[0], BBOX[1]], [BBOX[0], BBOX[3]], [BBOX[2], BBOX[1]], [BBOX[2], BBOX[3]]].map(([e, n]) => lv95ToWgs(e, n));
   BBOX_LL = [Math.min(...corners.map((c) => c[0])), Math.min(...corners.map((c) => c[1])),
     Math.max(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[1]))];
+}
+
+// The data lists hectares sorted by E index, then N index: per E column, the start of its hectares,
+// then a binary search over N. Same get() as a Map, in 14 KB instead of a 15 MB Map (and 20 ms faster).
+function cellIndex() {
+  for (let i = 1; i < N; i++) {
+    if (E_IDX[i] < E_IDX[i - 1] || (E_IDX[i] === E_IDX[i - 1] && N_IDX[i] <= N_IDX[i - 1])) { // not sorted: plain Map
+      const m = new Map();
+      for (let k = 0; k < N; k++) m.set(E_IDX[k] * 65536 + N_IDX[k], k);
+      return m;
+    }
+  }
+  const eMax = E_IDX[N - 1], start = new Int32Array(eMax + 2);
+  for (let i = 0; i < N; i++) start[E_IDX[i] + 1]++;
+  for (let e = 0; e <= eMax; e++) start[e + 1] += start[e];
+  return {
+    get(key) {
+      const e = Math.floor(key / 65536), n = key - e * 65536;
+      if (e < 0 || e > eMax) return undefined;
+      let lo = start[e], hi = start[e + 1] - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1, v = N_IDX[mid];
+        if (v === n) return mid;
+        if (v < n) lo = mid + 1; else hi = mid - 1;
+      }
+      return undefined;
+    },
+  };
 }
 
 // Active column, optionally with the non-geocoded (commune-centre) residents removed.
@@ -183,14 +217,21 @@ function updateSites() {
   SITES = ANT.filterSites(A, state.ant);
   SITE_LIST = Array.from(SITES); // deck.gl layer data
   AIDX = ANT.buildIndex(A, SITES);
+  antVersion++;
+  ANALYSIS = null;
+}
+// Distance from every hectare to its nearest filtered site (~0.1 s): only for the distance metric
+// and the analysis panel, not on every filter change.
+let distVersion = -1;
+function ensureDist() {
+  if (distVersion === antVersion || !A) return;
   DIST = new Float32Array(N);
   NEAR = new Int32Array(N);
   for (let i = 0; i < N; i++) {
     const [j, d] = ANT.nearest(A, AIDX, cellE(i) + 50, cellN(i) + 50);
     NEAR[i] = j; DIST[i] = j >= 0 ? d : NaN;
   }
-  antVersion++;
-  ANALYSIS = null;
+  distVersion = antVersion;
 }
 
 // ---------------------------------------------------------------- metrics
@@ -266,6 +307,7 @@ function parts(src, g) {
   if (src.type === 'ratio') return { num: sumCols(g, src.num), den: sumCols(g, src.den) };
   if (src.type === 'mean') return { num: sumCols(g, src.codes, src.weights), den: sumCols(g, src.codes) };
   if (src.type === 'dist') {
+    ensureDist();
     const pop = col('BBTOT'), num = new Float32Array(N), den = new Float32Array(N);
     for (let i = 0; i < N; i++) if (pop[i] > 0 && DIST && Number.isFinite(DIST[i])) { num[i] = DIST[i] * pop[i]; den[i] = pop[i]; }
     return { num: g.sum(num), den: g.sum(den) };
@@ -349,8 +391,11 @@ const metricKey = (m) => `${m.id}|${state.excludeNoloc}|${m.src.type === 'dist' 
 function metricValues(m, g) {
   if (m.kind === 'class' && g.s !== 100) return new Float32Array(g.n).fill(NaN); // classes cannot be aggregated
   const key = `${metricKey(m)}|${g.s}`;
-  if (!valueCache.has(key)) valueCache.set(key, computeMetric(m, g));
-  return valueCache.get(key);
+  let v = valueCache.get(key);
+  if (v) { valueCache.delete(key); valueCache.set(key, v); return v; } // most recently used last
+  valueCache.set(key, (v = computeMetric(m, g)));
+  if (valueCache.size > 30) valueCache.delete(valueCache.keys().next().value); // ~1.4 MB per 100 m entry
+  return v;
 }
 const isRate = (m) => (m.kind === 'share' || m.kind === 'value' || m.kind === 'diverging') && !m.noMinPop;
 
@@ -495,6 +540,18 @@ function classify() {
   CLASSES = { m, breaks, labels, ramp, counts, naCount, rate };
   renderLegend();
   paint();
+  prewarm();
+}
+
+// Colours for the other zoom levels in idle time, so crossing a level while zooming does not stall.
+function prewarm() {
+  const version = colorVersion, todo = LEVELS.filter((s) => !colorCache.has(s));
+  const idle = self.requestIdleCallback ?? ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 50));
+  const step = (deadline) => {
+    while (todo.length && version === colorVersion && deadline.timeRemaining() > 6) colorsFor(gridFor(todo.shift()));
+    if (todo.length && version === colorVersion) idle(step);
+  };
+  idle(step);
 }
 
 // Colours (and 3D heights) for the grid that matches the current zoom.
@@ -506,7 +563,7 @@ function paint() {
   CELL_DATA = {
     length: g.n,
     attributes: {
-      getPosition: { value: g.pos, size: 2 },
+      getPosition: (g.posAttr ??= { value: g.pos, size: 2 }),
       getFillColor: { value: COLORS, size: 4, normalized: true },
       getElevation: { value: ELEV, size: 1 },
     },
@@ -528,6 +585,7 @@ function paint() {
 
 // ---------------------------------------------------------------- smooth heatmap
 let SMOOTH = null; // { key, surface, rgba, tiles, value(p), alpha(p) }
+let SURF = null;   // { key, s }: blurred layers, which depend only on the metric and sigma (the slow part)
 let smoothVersion = 0;
 function computeSmooth() {
   const { m, breaks, ramp } = CLASSES;
@@ -535,13 +593,17 @@ function computeSmooth() {
   if (SMOOTH?.key === key) return SMOOTH;
   if (m.kind === 'class') { SMOOTH = { key, tiles: [], value: () => NaN, alpha: () => 0 }; return SMOOTH; }
   const t0 = performance.now();
-  const g = gridFor(100);
-  const { num, den } = parts(m.src, g);
-  const layers = { num, den, sup: inhabitedIndicator() };
   const rate = isRate(m);
-  if (rate) layers.pop = Float32Array.from(col('BBTOT'));
-  const pts = { n: N, E: (i) => cellE(i) + 50, N: (i) => cellN(i) + 50 };
-  const s = blurSurface(pts, layers, BBOX, state.sigma);
+  const surfKey = `${metricKey(m)}|${state.sigma}`;
+  if (SURF?.key !== surfKey) {
+    SURF = null; // let the old surface go before allocating the new one
+    const { num, den } = parts(m.src, gridFor(100));
+    const layers = { num, den, sup: inhabitedIndicator() };
+    if (rate) layers.pop = Float32Array.from(col('BBTOT'));
+    const pts = { n: N, E: (i) => cellE(i) + 50, N: (i) => cellN(i) + 50 };
+    SURF = { key: surfKey, s: blurSurface(pts, layers, BBOX, state.sigma) };
+  }
+  const s = SURF.s;
   const perCell = (s.cell / 100) ** 2;                       // hectares per raster cell
   const kernelCells = 2 * Math.PI * s.sigmaCells ** 2;       // effective area of the Gaussian, in raster cells
   const clamp = m.kind === 'share' || m.kind === 'diverging';
@@ -1259,12 +1321,15 @@ function buildControls() {
   const minpop = $('minpop');
   minpop.value = state.minPop;
   let raf = 0;
+  const minPopChanged = () => { if (isRate(activeMetric())) { state.isolate = null; refresh(); } else saveSettings(); };
   minpop.addEventListener('input', () => {
     state.minPop = +minpop.value;
     syncControls();
+    if (state.smooth) return; // the smooth surface is recoloured once, on release ('change')
     cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => { if (isRate(activeMetric())) { state.isolate = null; refresh(); } else saveSettings(); });
+    raf = requestAnimationFrame(minPopChanged);
   });
+  minpop.addEventListener('change', () => { if (state.smooth) withBusy(minPopChanged); });
 
   const noloc = $('noloc');
   noloc.checked = state.excludeNoloc;
@@ -1272,6 +1337,7 @@ function buildControls() {
     state.excludeNoloc = noloc.checked;
     ANALYSIS = null;
     refresh();
+    renderDetail();
     updateViewStats();
     renderAnalysis();
   });
@@ -1317,10 +1383,14 @@ function buildControls() {
   }));
   const exag = $('exag');
   exag.value = state.exaggeration;
+  let exagRaf = 0;
   exag.addEventListener('input', () => {
     state.exaggeration = +exag.value;
     syncControls();
-    if (isTerrain() && map.getSource('spg-dem')) map.setTerrain({ source: 'spg-dem', exaggeration: state.exaggeration });
+    cancelAnimationFrame(exagRaf); // setTerrain rebuilds the terrain: at most once per frame
+    exagRaf = requestAnimationFrame(() => {
+      if (isTerrain() && map.getSource('spg-dem')) map.setTerrain({ source: 'spg-dem', exaggeration: state.exaggeration });
+    });
     saveSettings();
   });
   const smooth = $('smooth');
@@ -1328,6 +1398,7 @@ function buildControls() {
   smooth.addEventListener('change', () => {
     state.smooth = smooth.checked;
     state.isolate = null;
+    if (!state.smooth) SMOOTH = SURF = null; // ~150 MB of rasters
     if (state.smooth && state.view === '3d') { setView('2d'); }
     syncControls(); renderLegend(); withBusy(paint); saveSettings();
   });
@@ -1422,9 +1493,8 @@ function syncControls() {
   $('dim').setAttribute('aria-valuetext', `${Math.round(state.dim * 100)}%`);
 }
 
-function refresh() {
+function refresh() { // metric, attribute or minPop changed (the detail panel does not depend on them)
   classify();
-  renderDetail();
   saveSettings();
 }
 
@@ -1499,12 +1569,20 @@ function aggregate(indices) {
   const sums = {};
   const pop = col('BBTOT');
   let cells = 0;
-  for (const c of META.columns) {
-    if (c === 'HPI') continue;
-    const a = col(c);
+  const codes = META.columns.filter((c) => c !== 'HPI');
+  for (const c of codes) {
+    const a = RAW[c];
     let s = 0;
     for (const i of indices) s += a[i];
     sums[c] = s;
+  }
+  if (state.excludeNoloc) { // as col(): max(0, raw − unlocated) = raw − min(raw, unlocated), on 1,941 hectares
+    const inScope = new Uint8Array(N);
+    for (const i of indices) inScope[i] = 1;
+    for (let j = 0; j < M; j++) {
+      const i = NOLOC_IDX[j];
+      if (inScope[i]) for (const c of codes) sums[c] -= Math.min(RAW[c][i], NOLOC[c][j]);
+    }
   }
   for (const i of indices) if (pop[i] > 0) cells++;
   return { sums, cells };
@@ -1707,10 +1785,10 @@ function antennaSection(sums, isCell) {
   const filtered = f.ops.some((v, k) => !v && opCounts()[k]) || f.tech || f.type;
   wrap.append(el('h3', null, `Antenna sites${filtered ? ' (current filters)' : ''}`));
   if (isCell) {
-    const i = state.selected, j = i >= 0 ? NEAR[i] : -1;
+    const i = state.selected, [j, d] = i >= 0 ? ANT.nearest(A, AIDX, cellE(i) + 50, cellN(i) + 50) : [-1, Infinity];
     const p = el('p', 'note');
     p.textContent = j >= 0
-      ? `${sites.length ? `${sites.length} site${sites.length > 1 ? 's' : ''} in this hectare. ` : ''}Nearest: ${fmtM(DIST[i])} — ${A.name[j]} (${A.types[A.type[j]]}, ${ANT.TECH_LABEL(A.tech[j])}).`
+      ? `${sites.length ? `${sites.length} site${sites.length > 1 ? 's' : ''} in this hectare. ` : ''}Nearest: ${fmtM(d)} — ${A.name[j]} (${A.types[A.type[j]]}, ${ANT.TECH_LABEL(A.tech[j])}).`
       : 'No antenna site matches the filters.';
     wrap.append(p);
     return wrap;
@@ -1850,6 +1928,7 @@ function computeAnalysis() {
   let total = 0, uninhabited = 0;
   for (let i = 0; i < N; i++) total += pop[i];
   for (const i of SITES) if (cellAt(A.e[i], A.N[i]) < 0) uninhabited++;
+  ensureDist();
   ANALYSIS = { byScale, curve: distanceCurve(DIST, pop), total, uninhabited };
   return ANALYSIS;
 }
@@ -2060,11 +2139,7 @@ function setupSearch() {
     return;
   }
   $('subtitle').textContent = `Population per hectare · 31 Dec ${META.year}`;
-  $('loading-msg').textContent = 'Matching antenna sites to hectares…';
-  await new Promise((r) => setTimeout(r, 0));
-  const t0 = performance.now();
   updateSites();
-  console.debug(`nearest-site search for ${nf.format(N)} hectares in ${Math.round(performance.now() - t0)} ms`);
   console.debug(GEO_PROXY ? 'swisstopo requests go through the local caching proxy' : 'no caching proxy: swisstopo is requested directly');
   buildControls();
   setupSearch();
@@ -2080,5 +2155,5 @@ function setupSearch() {
 })();
 
 async function loadAntennas() {
-  try { return await ANT.loadAntennas('data/antennas.json'); } catch (e) { console.warn('No antenna data', e); return null; }
+  try { return await ANT.loadAntennas(early('antennas', 'data/antennas.json')); } catch (e) { console.warn('No antenna data', e); return null; }
 }

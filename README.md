@@ -105,6 +105,7 @@ web/terrain.js             swisstopo terrain, on-demand population tiles for dra
 web/remote.js              routes swisstopo URLs through the caching proxy when it is available
 web/geo.js                 LV95 <-> WGS84
 web/vendor/                pinned third-party libraries (see its README)
+web/geo/health             answers the proxy probe on static hosts without the proxy (serve.py and nginx answer it themselves)
 web/style.css              styles (light/dark follow the OS setting)
 deploy/                    nginx + password login for a server deployment (install.sh, login.html, nginx-locations.conf)
 ```
