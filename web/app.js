@@ -1639,12 +1639,13 @@ function viewTest() {
   const inBox = (x, y) => x >= w && x <= e && y >= s && y <= n;
   if (!map.getPitch() && !map.getBearing()) return inBox;
   const { width, height } = map.getCanvas().getBoundingClientRect();
-  const q = [[0, 0], [width, 0], [width, height], [0, height]].map((pt) => map.unproject(pt)).map((ll) => [ll.lng, ll.lat]);
-  const sign = Math.sign((q[1][0] - q[0][0]) * (q[2][1] - q[0][1]) - (q[1][1] - q[0][1]) * (q[2][0] - q[0][0]));
-  return (x, y) => inBox(x, y) && q.every(([ax, ay], k) => {
-    const [bx, by] = q[(k + 1) % 4];
-    return sign * ((bx - ax) * (y - ay) - (by - ay) * (x - ax)) >= 0;
-  });
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = [[0, 0], [width, 0], [width, height], [0, height]]
+    .map((pt) => map.unproject(pt)).map((ll) => [ll.lng, ll.lat]);
+  const sg = Math.sign((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)); // corner order: clockwise or not
+  // Plain arithmetic: this runs for every hectare on each map move.
+  return (x, y) => x >= w && x <= e && y >= s && y <= n
+    && sg * ((x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)) >= 0 && sg * ((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) >= 0
+    && sg * ((x3 - x2) * (y - y2) - (y3 - y2) * (x - x2)) >= 0 && sg * ((x0 - x3) * (y - y3) - (y0 - y3) * (x - x3)) >= 0;
 }
 function viewIndices() {
   const inView = viewTest(), out = [];
