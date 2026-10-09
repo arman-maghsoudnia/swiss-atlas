@@ -1,5 +1,7 @@
 # Swiss atlas
 
+[![Tests](https://github.com/arman-maghsoudnia/swiss-atlas/actions/workflows/tests.yml/badge.svg)](https://github.com/arman-maghsoudnia/swiss-atlas/actions/workflows/tests.yml)
+
 An interactive map of Switzerland at hectare resolution (100 × 100 m). It shows where people live, from the Federal Statistical Office's STATPOP 2024 data (31 Dec 2024), and where the mobile antenna sites are, from OFCOM, on swisstopo basemaps.
 
 **Live map:** https://arman-maghsoudnia.github.io/swiss-atlas/
