@@ -139,6 +139,18 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.doesNotMatch(await ev(`location.hash`), /sel=/);
   });
 
+  test('search: an address flies there and selects its hectare', async () => {
+    await load(1280, 800, false);
+    const ev = page.ev;
+    await ev(`(() => { const i = document.getElementById('search'); i.focus(); i.value = 'Bahnhofstrasse 1'; i.dispatchEvent(new Event('input')); })()`);
+    assert.ok(await page.waitFor(`document.querySelectorAll('#search-results li').length === 1`, 5000), 'search results');
+    assert.equal(await ev(`document.querySelector('#search-results li').getAttribute('aria-label')`), 'Bahnhofstrasse 1 8001 Zürich, Address');
+    await ev(`document.getElementById('search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))`);
+    assert.ok(await page.waitFor(`location.hash.startsWith('#map=15.5/') && location.hash.includes('sel=2683100,1247100')`, 6000),
+      `flew to the address: ${await ev('location.hash')}`);
+    assert.ok(await ev(`!document.getElementById('detail').hidden`));
+  });
+
   test('phone: folded panel, collapsed credits, details as a sheet', async () => {
     await page.ev(`localStorage.removeItem('spg-settings')`).catch(() => {});
     await load(375, 812, true);
@@ -155,6 +167,11 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
   });
 });
+
+const SEARCH_RESULT = { results: [{ attrs: {
+  label: '<b>Bahnhofstrasse 1</b> 8001 Zürich', origin: 'address', lat: 47.36975, lon: 8.53913,
+  geom_st_box2d: 'BOX(8.53913 47.36975,8.53913 47.36975)',
+} }] };
 
 // One page over the DevTools protocol, with geo.admin.ch blocked and the basemap set to "None".
 async function openPage(port) {
@@ -178,8 +195,13 @@ async function openPage(port) {
       errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     } else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
       errors.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
-    } else if (m.method === 'Fetch.requestPaused') {
-      send('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 503, body: '' }).catch(() => {});
+    } else if (m.method === 'Fetch.requestPaused') { // geo.admin.ch: a canned search answer, 503 for the rest
+      const search = m.params.request.url.includes('/SearchServer');
+      send('Fetch.fulfillRequest', {
+        requestId: m.params.requestId, responseCode: search ? 200 : 503,
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
+        body: search ? Buffer.from(JSON.stringify(SEARCH_RESULT)).toString('base64') : '',
+      }).catch(() => {});
     }
   });
   await send('Runtime.enable');
