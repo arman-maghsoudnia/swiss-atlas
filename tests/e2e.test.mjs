@@ -11,6 +11,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { allKeys } from './_i18n.mjs';
 
 const WEB = path.resolve(import.meta.dirname, '..', 'web');
 const CHROME = [process.env.CHROME, '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
@@ -20,7 +21,7 @@ const skip = !process.env.SPG_E2E ? 'set SPG_E2E=1 to run (needs Chrome)' : !CHR
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.jpg': 'image/jpeg' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-describe('browser smoke test', { skip, timeout: 240_000 }, () => {
+describe('browser smoke test', { skip, timeout: 480_000 }, () => {
   let server, chrome, profile, base, page;
 
   before(async () => {
@@ -203,6 +204,48 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     const [csv] = await ev(`Promise.all(window.__files).then((f) => { window.__files = []; return f; })`);
     assert.match(new TextDecoder().decode(new Uint8Array(csv.bytes)), /\r\n"Commune Testwil \(ZH\), FSO no\. 9999, as of 1 January 2025",BBTOT,/);
     await ev(`document.querySelector('[data-scope="cell"]').click()`);
+    assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
+  });
+
+  test('languages: German, French and Italian pages have no English left; the switch keeps the view', async () => {
+    const keys = (await allKeys()).filter((k) => !/\{/.test(k));
+    const visible = `(() => {
+      const out = [];
+      const walk = (n) => { for (const c of n.childNodes) {
+        if (c.nodeType === 3) { const s = c.textContent.trim(); if (s) out.push(s); }
+        else if (c.nodeType === 1 && !c.hidden && getComputedStyle(c).display !== 'none') walk(c);
+      } };
+      for (const id of ['panel', 'detail']) walk(document.getElementById(id));
+      for (const e of document.querySelectorAll('[aria-label], [title], [placeholder]')) for (const a of ['aria-label', 'title', 'placeholder']) if (e.getAttribute(a)) out.push(e.getAttribute(a));
+      for (const o of document.querySelectorAll('option, optgroup')) out.push(o.label || o.textContent.trim());
+      return out;
+    })()`;
+    const check = async (code, sample) => {
+      const dict = (await import(`../web/i18n/${code}.js`)).default;
+      const english = new Set(keys.filter((k) => dict[k] !== k));
+      assert.ok(await page.waitFor(`!document.getElementById('loading') && document.documentElement.lang === '${code}'`, 90_000), `${code} loads`);
+      assert.ok(await page.waitFor(`!document.getElementById('detail').hidden`, 10_000), `${code}: the link's selection opens`);
+      const texts = await page.ev(visible);
+      const left = [...new Set(texts.filter((x) => english.has(x) && !Object.values(dict).includes(x)))];
+      assert.deepEqual(left, [], `${code}: untranslated`);
+      for (const [sel, want] of sample) assert.equal(await page.ev(`document.querySelector('${sel}').textContent.trim()`), want, `${code}: ${sel}`);
+      assert.equal(await page.ev(`document.documentElement.classList.contains('i18n-pending')`), false);
+    };
+    page.errors.length = 0;
+    await page.send('Page.navigate', { url: `${base}?lang=1#map=14/46.948/7.44&m=foreign&sel=2600100,1199600&sc=radius&r=2&l=de` });
+    await check('de', [['label[for="metric"]', 'Einfärben nach'], ['#d-title', 'Umkreis 2 km'], ['[data-scope="commune"]', 'Gemeinde']]);
+    assert.match(await page.ev(`document.querySelector('#detail .tile .v').textContent`), /^\d{1,3}(['’]\d{3})*$/, 'de-CH digit grouping (ICU versions differ on the apostrophe)');
+    // the language menu: the page reloads in French with the same view
+    await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'fr'; s.dispatchEvent(new Event('change')); })()`);
+    await check('fr', [['label[for="metric"]', 'Couleur selon'], ['#d-title', 'Rayon de 2 km'], ['[data-scope="view"]', 'Vue']]);
+    const hash = await page.ev(`location.hash`);
+    for (const part of ['m=foreign', 'sel=2600100,1199600', 'sc=radius', 'l=fr']) assert.ok(hash.includes(part), `${part} in ${hash}`);
+    assert.match(await page.ev(`document.querySelectorAll('#detail .tile .v')[2].textContent`), /^\d,\d\d$/, 'decimal comma');
+    await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'it'; s.dispatchEvent(new Event('change')); })()`);
+    await check('it', [['label[for="metric"]', 'Colora per'], ['#d-title', 'Entro 2 km'], ['#metric option[value="foreign"]', 'Stranieri']]);
+    await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'en'; s.dispatchEvent(new Event('change')); })()`);
+    assert.ok(await page.waitFor(`!document.getElementById('loading') && document.documentElement.lang === 'en' && document.querySelector('label[for="metric"]').textContent === 'Colour by'`, 90_000), 'back to English');
+    await page.ev(`history.replaceState(null, '', location.pathname); localStorage.removeItem('spg-lang')`);
     assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
   });
 

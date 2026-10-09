@@ -105,6 +105,15 @@ a { color: var(--accent); }
 }
 .icon-btn:hover { background: var(--wash); color: var(--text-primary); }
 .head-btns { display: flex; gap: 2px; flex: none; }
+/* Language: two letters, styled like the icon buttons next to it */
+select.lang {
+  width: auto; height: 28px; margin: 0; padding: 0 6px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  cursor: pointer; appearance: none; -webkit-appearance: none; text-align: center;
+}
+select.lang:hover { background: var(--wash); color: var(--text-primary); }
+/* Until app.js has translated it, a German, French or Italian page is not shown (see index.html) */
+html.i18n-pending body { visibility: hidden; }
 #toast {
   position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 15;
   padding: 7px 12px; font-size: 12.5px; pointer-events: none;
@@ -133,6 +142,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 6px 0 0;
 }
 .seg button:hover { background: var(--wash); }
 .seg button[aria-checked="true"] { background: var(--text-primary); color: var(--surface-1); }
+/* Four summary options fit a 320 px phone in every language (German is the widest) */
+@media (max-width: 380px) { .scope .seg button { padding: 4px 6px; } }
 
 /* search */
 .search { position: relative; }
@@ -152,7 +163,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 6px 0 0;
 .kpis { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 8px; margin-top: 12px; }
 .kpi { display: flex; flex-direction: column; min-width: 0; }
 .kpi-v { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
-.kpi-l { color: var(--text-muted); font-size: 11.5px; }
+.kpi-l { color: var(--text-muted); font-size: 11.5px; hyphens: auto; overflow-wrap: break-word; }
 
 /* legend */
 .legend { margin-top: 10px; }
@@ -251,7 +262,7 @@ dl.props dd { margin: 0; color: var(--text-primary); }
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; margin-top: 12px; }
 .tile { display: flex; flex-direction: column; min-width: 0; }
 .tile .v { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
-.tile .l { color: var(--text-muted); font-size: 11px; }
+.tile .l { color: var(--text-muted); font-size: 11px; hyphens: auto; overflow-wrap: break-word; } /* long German words */
 .tile .ref { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .sec { margin-top: 16px; }

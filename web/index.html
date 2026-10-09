@@ -21,6 +21,21 @@
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
   <script>
+    // The language as i18n.js picks it: hide the English text until app.js has translated the page
+    // (at most 4 s, should the scripts not run at all).
+    try {
+      const ok = (l) => (['en', 'de', 'fr', 'it'].includes(l) ? l : null);
+      let saved = null;
+      try { saved = localStorage.getItem('spg-lang'); } catch { /* storage blocked */ }
+      const l = ok((/(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(location.hash) || [])[1]) || ok(saved)
+        || (navigator.languages || []).map((x) => x.slice(0, 2).toLowerCase()).find(ok) || 'en';
+      if (l !== 'en') {
+        const root = document.documentElement;
+        root.lang = l;
+        root.classList.add('i18n-pending');
+        setTimeout(() => root.classList.remove('i18n-pending'), 4000);
+      }
+    } catch { /* show the page in English */ }
     // Start the data downloads (8.5 MB) right away, in parallel with the libraries; app.js picks them up.
     if (location.protocol !== 'file:') {
       const get = (url) => { const p = fetch(url, { cache: 'no-cache' }); p.catch(() => {}); return p; };
@@ -36,22 +51,32 @@
   <link rel="modulepreload" href="analysis.js">
   <link rel="modulepreload" href="terrain.js">
   <link rel="modulepreload" href="remote.js">
+  <link rel="modulepreload" href="i18n.js">
+  <link rel="modulepreload" href="i18n/de.js">
+  <link rel="modulepreload" href="i18n/fr.js">
+  <link rel="modulepreload" href="i18n/it.js">
 </head>
 <body>
-  <aside id="panel" class="card" aria-label="Map controls">
+  <aside id="panel" class="card" aria-label="Map controls" data-i18n-attr="aria-label">
     <header class="panel-head">
       <div>
         <h1>Swiss atlas</h1>
-        <p class="sub" id="subtitle">Population per hectare</p>
+        <p class="sub" id="subtitle" data-i18n>Population per hectare</p>
       </div>
       <div class="head-btns">
-        <button id="share" class="icon-btn" type="button" aria-label="Share this view" title="Share this view (link with the current map and settings)">
+        <select id="lang" class="lang" aria-label="Language" title="Language" data-i18n-attr="aria-label title">
+          <option value="en" lang="en" aria-label="English">EN</option>
+          <option value="de" lang="de" aria-label="Deutsch">DE</option>
+          <option value="fr" lang="fr" aria-label="Français">FR</option>
+          <option value="it" lang="it" aria-label="Italiano">IT</option>
+        </select>
+        <button id="share" class="icon-btn" type="button" aria-label="Share this view" title="Share this view (link with the current map and settings)" data-i18n-attr="aria-label title">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.6 2.6 0 0 1 3.7 3.7l-.9.9M8.8 11.4l-.9.9a2.6 2.6 0 0 1-3.7-3.7l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         </button>
-        <button id="save-image" class="icon-btn" type="button" aria-label="Save the map as an image" title="Save the map as an image (PNG, with legend and sources)">
+        <button id="save-image" class="icon-btn" type="button" aria-label="Save the map as an image" title="Save the map as an image (PNG, with legend and sources)" data-i18n-attr="aria-label title">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 2.5v7M5 6.8l3 3 3-3M3 10.5v2.2c0 .4.3.8.8.8h8.4c.5 0 .8-.4.8-.8v-2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" aria-label="Map controls" title="Collapse panel">
+        <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" aria-label="Map controls" title="Collapse panel" data-i18n-attr="aria-label title">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
       </div>
@@ -59,26 +84,26 @@
 
     <div id="panel-body">
       <div class="search">
-        <input id="search" type="search" role="combobox" aria-expanded="false" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-keyshortcuts="/" aria-autocomplete="list" aria-controls="search-results">
-        <ul id="search-results" role="listbox" aria-label="Search results" hidden></ul>
+        <input id="search" type="search" role="combobox" aria-expanded="false" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-keyshortcuts="/" aria-autocomplete="list" aria-controls="search-results" data-i18n-attr="placeholder aria-label">
+        <ul id="search-results" role="listbox" aria-label="Search results" data-i18n-attr="aria-label" hidden></ul>
       </div>
 
       <div class="kpis">
-        <div class="kpi"><span class="kpi-v" id="kpi-view">–</span><span class="kpi-l">residents in view</span></div>
-        <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l">inhabited ha</span></div>
-        <div class="kpi"><span class="kpi-v" id="kpi-ant">–</span><span class="kpi-l">antenna sites</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-view">–</span><span class="kpi-l" data-i18n>residents in view</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l" data-i18n>inhabited ha</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-ant">–</span><span class="kpi-l" data-i18n>antenna sites</span></div>
       </div>
-      <button id="sum-view" type="button" class="link-btn">Summarise this view <span aria-hidden="true">›</span></button>
+      <button id="sum-view" type="button" class="link-btn"><span data-i18n>Summarise this view</span>&nbsp;<span aria-hidden="true">›</span></button>
 
       <section class="block" aria-labelledby="h-colour">
-        <h2 id="h-colour" class="sr-only">Population layer</h2>
-        <label class="lbl" for="metric">Colour by</label>
+        <h2 id="h-colour" class="sr-only" data-i18n>Population layer</h2>
+        <label class="lbl" for="metric" data-i18n>Colour by</label>
         <select id="metric"></select>
         <div id="raw-opts" class="row" hidden>
-          <select id="raw-col" aria-label="Attribute"></select>
-          <div class="seg" role="radiogroup" aria-label="Show as">
-            <button data-raw-mode="count" role="radio">Count</button>
-            <button data-raw-mode="share" role="radio">Share</button>
+          <select id="raw-col" aria-label="Attribute" data-i18n-attr="aria-label"></select>
+          <div class="seg" role="radiogroup" aria-label="Show as" data-i18n-attr="aria-label">
+            <button data-raw-mode="count" role="radio" data-i18n>Count</button>
+            <button data-raw-mode="share" role="radio" data-i18n>Share</button>
           </div>
         </div>
         <p class="hint" id="metric-desc"></p>
@@ -87,130 +112,130 @@
       </section>
 
       <section class="block" id="ant-block" aria-labelledby="h-ant">
-        <h2 id="h-ant" class="sr-only">Antenna sites</h2>
+        <h2 id="h-ant" class="sr-only" data-i18n>Antenna sites</h2>
         <div class="row between">
-          <label class="check strong"><input type="checkbox" id="ant-show"> Antenna sites</label>
-          <button id="open-analysis" class="link-btn" type="button">Sites vs population <span aria-hidden="true">›</span></button>
+          <label class="check strong"><input type="checkbox" id="ant-show"> <span data-i18n>Antenna sites</span></label>
+          <button id="open-analysis" class="link-btn" type="button"><span data-i18n>Sites vs population</span>&nbsp;<span aria-hidden="true">›</span></button>
         </div>
         <div id="ant-body">
-          <div class="ops" id="ant-ops" role="group" aria-label="Operators"></div>
+          <div class="ops" id="ant-ops" role="group" aria-label="Operators" data-i18n-attr="aria-label"></div>
           <div class="row">
-            <select id="ant-tech" class="compact grow" aria-label="Technology">
-              <option value="">Any technology</option>
-              <option value="5G">Offers 5G</option>
-              <option value="4G">Offers 4G</option>
-              <option value="3G">Offers 3G</option>
-              <option value="2G">Offers 2G</option>
+            <select id="ant-tech" class="compact grow" aria-label="Technology" data-i18n-attr="aria-label">
+              <option value="" data-i18n>Any technology</option>
+              <option value="5G" data-i18n>Offers 5G</option>
+              <option value="4G" data-i18n>Offers 4G</option>
+              <option value="3G" data-i18n>Offers 3G</option>
+              <option value="2G" data-i18n>Offers 2G</option>
             </select>
-            <select id="ant-type" class="compact grow" aria-label="Site type">
-              <option value="">Any type</option>
-              <option value="macro">Outdoor &gt; 6 W</option>
-              <option value="small">Small cells ≤ 6 W</option>
-              <option value="tunnel">Tunnel</option>
-              <option value="other">Other</option>
+            <select id="ant-type" class="compact grow" aria-label="Site type" data-i18n-attr="aria-label">
+              <option value="" data-i18n>Any type</option>
+              <option value="macro" data-i18n>Outdoor &gt; 6 W</option>
+              <option value="small" data-i18n>Small cells ≤ 6 W</option>
+              <option value="tunnel" data-i18n>Tunnel</option>
+              <option value="other" data-i18n>Other</option>
             </select>
           </div>
           <div class="row between">
-            <label class="lbl" for="ant-color">Colour sites by</label>
+            <label class="lbl" for="ant-color" data-i18n>Colour sites by</label>
             <select id="ant-color" class="compact">
-              <option value="single">One colour</option>
-              <option value="operator">Operator</option>
-              <option value="tech">Technology</option>
-              <option value="type">Type</option>
+              <option value="single" data-i18n>One colour</option>
+              <option value="operator" data-i18n>Operator</option>
+              <option value="tech" data-i18n>Technology</option>
+              <option value="type" data-i18n>Type</option>
             </select>
           </div>
-          <label class="check"><input type="checkbox" id="ant-size"> Size by power class</label>
+          <label class="check"><input type="checkbox" id="ant-size"> <span data-i18n>Size by power class</span></label>
           <div id="ant-legend" class="legend"></div>
-          <p class="hint"><span id="ant-date"></span>Sites are drawn at their first mast. SBB (railway) and German border sites are off by default.</p>
+          <p class="hint"><span id="ant-date"></span><span data-i18n>Sites are drawn at their first mast. SBB (railway) and German border sites are off by default.</span></p>
         </div>
       </section>
 
       <section class="block" aria-labelledby="h-data">
-        <h2 id="h-data" class="sr-only">Data options</h2>
+        <h2 id="h-data" class="sr-only" data-i18n>Data options</h2>
         <div class="row between">
-          <label class="lbl" for="minpop">Min. residents per hectare</label>
+          <label class="lbl" for="minpop" data-i18n>Min. residents per hectare</label>
           <output id="minpop-out" for="minpop" class="val"></output>
         </div>
         <input id="minpop" type="range" min="1" max="100" step="1">
-        <p class="hint">Shares and averages are greyed out below this: counts of 1–3 are published as 3.</p>
+        <p class="hint" data-i18n>Shares and averages are greyed out below this: counts of 1–3 are published as 3.</p>
 
-        <label class="check"><input type="checkbox" id="noloc"> Exclude unlocated residents</label>
+        <label class="check"><input type="checkbox" id="noloc"> <span data-i18n>Exclude unlocated residents</span></label>
         <p class="hint" id="noloc-hint"></p>
       </section>
 
       <section class="block" aria-labelledby="h-view">
-        <h2 id="h-view" class="sr-only">View and basemap</h2>
+        <h2 id="h-view" class="sr-only" data-i18n>View and basemap</h2>
         <div class="row between">
-          <span class="lbl">View</span>
-          <div class="seg" role="radiogroup" aria-label="View">
-            <button data-view="2d" role="radio" title="Flat map">Flat</button>
-            <button data-view="3d" role="radio" title="3D columns, height = residents">Columns</button>
-            <button data-view="terrain" role="radio" title="Draped over swisstopo's 3D terrain">Terrain</button>
+          <span class="lbl" data-i18n>View</span>
+          <div class="seg" role="radiogroup" aria-label="View" data-i18n-attr="aria-label">
+            <button data-view="2d" role="radio" title="Flat map" data-i18n data-i18n-attr="title">Flat</button>
+            <button data-view="3d" role="radio" title="3D columns, height = residents" data-i18n data-i18n-attr="title">Columns</button>
+            <button data-view="terrain" role="radio" title="Draped over swisstopo's 3D terrain" data-i18n data-i18n-attr="title">Terrain</button>
           </div>
         </div>
-        <label class="check"><input type="checkbox" id="smooth"> Smooth heatmap</label>
+        <label class="check"><input type="checkbox" id="smooth"> <span data-i18n>Smooth heatmap</span></label>
         <div id="sigma-row" class="row between" hidden>
-          <label class="lbl" for="sigma">Radius <output id="sigma-out" for="sigma"></output></label>
+          <label class="lbl" for="sigma"><span data-i18n>Radius</span> <output id="sigma-out" for="sigma"></output></label>
           <input id="sigma" type="range" min="0" max="6" step="1">
         </div>
         <div id="exag-row" class="row between" hidden>
-          <label class="lbl" for="exag">Relief <output id="exag-out" for="exag"></output></label>
+          <label class="lbl" for="exag"><span data-i18n>Relief</span> <output id="exag-out" for="exag"></output></label>
           <input id="exag" type="range" min="1" max="3" step="0.1">
         </div>
         <p class="hint" id="terrain-note"></p>
         <div id="height-row" class="row between" hidden>
-          <label class="lbl" for="height" title="Columns are scaled with the zoom so that they stay readable">Column height <output id="height-out" for="height"></output></label>
+          <label class="lbl" for="height" title="Columns are scaled with the zoom so that they stay readable" data-i18n-attr="title"><span data-i18n>Column height</span> <output id="height-out" for="height"></output></label>
           <input id="height" type="range" min="0.5" max="20" step="0.5">
         </div>
         <div class="row between">
-          <label class="lbl" for="opacity">Opacity</label>
+          <label class="lbl" for="opacity" data-i18n>Opacity</label>
           <input id="opacity" type="range" min="0.2" max="1" step="0.05">
         </div>
         <div class="row between" id="dim-row">
-          <label class="lbl" for="dim">Dim basemap</label>
+          <label class="lbl" for="dim" data-i18n>Dim basemap</label>
           <input id="dim" type="range" min="0" max="1" step="0.05">
         </div>
         <div class="row between">
-          <label class="lbl" for="basemap">Basemap</label>
+          <label class="lbl" for="basemap" data-i18n>Basemap</label>
           <select id="basemap" class="compact">
-            <option value="imagery">Aerial + labels</option>
-            <option value="swissimage">Aerial</option>
-            <option value="national">National map</option>
-            <option value="nationalGrey">National map (grey)</option>
-            <option value="light">Light map</option>
-            <option value="base">Standard map</option>
-            <option value="none">None</option>
+            <option value="imagery" data-i18n>Aerial + labels</option>
+            <option value="swissimage" data-i18n>Aerial</option>
+            <option value="national" data-i18n>National map</option>
+            <option value="nationalGrey" data-i18n>National map (grey)</option>
+            <option value="light" data-i18n>Light map</option>
+            <option value="base" data-i18n>Standard map</option>
+            <option value="none" data-i18n>None</option>
           </select>
         </div>
       </section>
 
       <footer class="src">
-        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT<span class="sr-only"> (opens in a new tab)</span></a> (31 Dec 2024);
-        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">Federal Office of Communications OFCOM<span class="sr-only"> (opens in a new tab)</span></a>, as supplied by the operators, accuracy not guaranteed.
-        Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.
-        <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener">Source code<span class="sr-only"> (opens in a new tab)</span></a> (AGPL-3.0).
+        <span data-i18n>Data:</span> <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" data-href="fso" target="_blank" rel="noopener"><span data-i18n>STATPOP2024, FSO GEOSTAT</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a> (<span id="src-date">31 Dec 2024</span>);
+        <span data-i18n>antenna sites</span> <a href="https://www.geocat.ch/geonetwork/srv/eng/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" data-href="ofcom" target="_blank" rel="noopener"><span data-i18n>Federal Office of Communications OFCOM</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a><span data-i18n>, as supplied by the operators, accuracy not guaranteed.</span>
+        <span data-i18n>Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.</span>
+        <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener"><span data-i18n>Source code</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a> (AGPL-3.0).
       </footer>
     </div>
   </aside>
 
-  <aside id="detail" class="card" aria-label="Selection details" tabindex="-1" hidden>
+  <aside id="detail" class="card" aria-label="Selection details" data-i18n-attr="aria-label" tabindex="-1" hidden>
     <header class="panel-head">
       <div>
-        <h2 id="d-title">Hectare</h2>
+        <h2 id="d-title" data-i18n>Hectare</h2>
         <p class="sub" id="d-sub"></p>
       </div>
-      <button id="d-close" class="icon-btn" title="Close (Esc)" aria-label="Close details">
+      <button id="d-close" class="icon-btn" title="Close (Esc)" aria-label="Close details" data-i18n-attr="title aria-label">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
     </header>
     <div class="scope row">
-      <div class="seg" role="radiogroup" aria-label="Summarise">
-        <button data-scope="cell" role="radio">Hectare</button>
-        <button data-scope="radius" role="radio">Radius</button>
-        <button data-scope="commune" role="radio">Commune</button>
-        <button data-scope="view" role="radio">In view</button>
+      <div class="seg" role="radiogroup" aria-label="Summarise" data-i18n-attr="aria-label">
+        <button data-scope="cell" role="radio" data-i18n>Hectare</button>
+        <button data-scope="radius" role="radio" data-i18n>Radius</button>
+        <button data-scope="commune" role="radio" data-i18n>Commune</button>
+        <button data-scope="view" role="radio" data-i18n>In view</button>
       </div>
-      <select id="radius" class="compact" aria-label="Radius">
+      <select id="radius" class="compact" aria-label="Radius" data-i18n-attr="aria-label">
         <option value="0.5">500 m</option>
         <option value="1">1 km</option>
         <option value="2">2 km</option>
@@ -222,13 +247,13 @@
     <div id="d-body"></div>
   </aside>
 
-  <aside id="analysis" class="card" aria-label="Antenna sites vs population" tabindex="-1" hidden>
+  <aside id="analysis" class="card" aria-label="Antenna sites vs population" data-i18n-attr="aria-label" tabindex="-1" hidden>
     <header class="panel-head">
       <div>
-        <h2>Antenna sites vs population</h2>
+        <h2 data-i18n>Antenna sites vs population</h2>
         <p class="sub" id="a-sub"></p>
       </div>
-      <button id="a-close" class="icon-btn" title="Close (Esc)" aria-label="Close analysis">
+      <button id="a-close" class="icon-btn" title="Close (Esc)" aria-label="Close analysis" data-i18n-attr="title aria-label">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
     </header>
@@ -242,8 +267,8 @@
   <p id="sr-status" class="sr-only" role="status"></p>
 
   <div id="loading" class="card">
-    <p id="loading-msg" role="status">Loading population data…</p>
-    <div class="bar" role="progressbar" aria-label="Loading population data" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loading-bar"></div></div>
+    <p id="loading-msg" role="status" data-i18n>Loading population data…</p>
+    <div class="bar" role="progressbar" aria-label="Loading population data" data-i18n-attr="aria-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loading-bar"></div></div>
   </div>
 
   <script type="module" src="app.js"></script>

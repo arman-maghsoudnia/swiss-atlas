@@ -1,7 +1,9 @@
 // Antennas vs population: correlation statistics and the two charts of the analysis panel.
 
+import { t, tp, locale, fmtNum, fmtPct } from './i18n.js';
+
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const nf = new Intl.NumberFormat('de-CH');
+const nf = new Intl.NumberFormat(locale);
 
 // ---------------------------------------------------------------- statistics
 function ranks(a) {
@@ -11,7 +13,7 @@ function ranks(a) {
     let m = k;
     while (m + 1 < idx.length && a[idx[m + 1]] === a[idx[k]]) m++;
     const avg = (k + m) / 2 + 1;
-    for (let t = k; t <= m; t++) r[idx[t]] = avg;
+    for (let q = k; q <= m; q++) r[idx[q]] = avg;
     k = m + 1;
   }
   return r;
@@ -98,8 +100,8 @@ function svgEl(tag, attrs, text) {
   if (text != null) n.textContent = text;
   return n;
 }
-const fmtM = (m) => (m >= 1000 ? `${+(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
-const fmtCompact = (v) => (v >= 1000 ? `${+(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `${v}`);
+const fmtM = (m) => (m >= 1000 ? `${fmtNum(m / 1000, 1)} km` : `${Math.round(m)} m`);
+const fmtCompact = (v) => (v >= 1000 ? `${fmtNum(v / 1000, v >= 10000 ? 0 : 1)}k` : `${v}`);
 
 /** Cumulative share of residents by distance to the nearest site, with a hover crosshair. */
 export function cdfChart(curve, { tip, hideTip, maxKm = 3 }) {
@@ -107,13 +109,13 @@ export function cdfChart(curve, { tip, hideTip, maxKm = 3 }) {
   const pw = W - m.l - m.r, ph = H - m.t - m.b;
   const x = (d) => m.l + (d / (maxKm * 1000)) * pw, y = (s) => m.t + (1 - s) * ph;
   const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img',
-    'aria-label': 'Share of residents living within a given distance of the nearest antenna site' });
+    'aria-label': t('Share of residents living within a given distance of the nearest antenna site') });
   for (const s of [0, 0.25, 0.5, 0.75, 1]) {
     svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(s), y2: y(s), class: s === 0 ? 'axis' : 'grid' }));
-    svg.append(svgEl('text', { x: m.l - 6, y: y(s) + 3, 'text-anchor': 'end' }, `${s * 100}%`));
+    svg.append(svgEl('text', { x: m.l - 6, y: y(s) + 3, 'text-anchor': 'end' }, fmtPct(s)));
   }
   for (let km = 0; km <= maxKm; km += 0.5) {
-    svg.append(svgEl('text', { x: x(km * 1000), y: H - 8, 'text-anchor': 'middle' }, km === 0 ? '0' : `${km} km`));
+    svg.append(svgEl('text', { x: x(km * 1000), y: H - 8, 'text-anchor': 'middle' }, km === 0 ? '0' : `${fmtNum(km, 1)} km`));
   }
   let d = '';
   const steps = Math.floor((maxKm * 1000) / curve.bin);
@@ -125,7 +127,7 @@ export function cdfChart(curve, { tip, hideTip, maxKm = 3 }) {
   const med = curve.quantile(0.5);
   if (med <= maxKm * 1000) {
     svg.append(svgEl('circle', { cx: x(med), cy: y(0.5), r: 4, class: 'dot s1' }));
-    svg.append(svgEl('text', { x: x(med) + 7, y: y(0.5) + 12, class: 'lbl' }, `median ${fmtM(med)}`));
+    svg.append(svgEl('text', { x: x(med) + 7, y: y(0.5) + 12, class: 'lbl' }, t('median {dist}', { dist: fmtM(med) })));
   }
   const cross = svgEl('line', { y1: m.t, y2: m.t + ph, class: 'cross', visibility: 'hidden' });
   svg.append(cross);
@@ -137,7 +139,7 @@ export function cdfChart(curve, { tip, hideTip, maxKm = 3 }) {
     const snapped = Math.round(dist / curve.bin) * curve.bin;
     cross.setAttribute('x1', x(snapped)); cross.setAttribute('x2', x(snapped));
     cross.setAttribute('visibility', 'visible');
-    tip(e.clientX, e.clientY, [`${Math.round(curve.shareWithin(snapped) * 100)} %`, `of residents live within ${fmtM(snapped)} of a site`]);
+    tip(e.clientX, e.clientY, [fmtPct(curve.shareWithin(snapped)), t('of residents live within {dist} of a site', { dist: fmtM(snapped) })]);
   });
   hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); hideTip(); });
   svg.append(hit);
@@ -157,7 +159,7 @@ export function scatterChart(pairs, { tip, hideTip, onHover, onClick }) {
   const canvas = document.createElement('canvas');
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', `Scatter plot of residents against antenna sites per ${pairs.s >= 1000 ? `${pairs.s / 1000} km` : `${pairs.s} m`} cell`);
+  canvas.setAttribute('aria-label', t('Scatter plot of residents against antenna sites per {size} cell', { size: pairs.s >= 1000 ? `${pairs.s / 1000} km` : `${pairs.s} m` }));
   const over = document.createElement('canvas');
   over.width = W * dpr; over.height = H * dpr;
   over.className = 'over';
@@ -259,8 +261,8 @@ export function scatterChart(pairs, { tip, hideTip, onHover, onClick }) {
     over.style.cursor = 'pointer';
     og.strokeStyle = css('--text-primary'); og.lineWidth = 2;
     og.beginPath(); og.arc(px[i], py[i], 5, 0, 2 * Math.PI); og.stroke();
-    tip(e.clientX, e.clientY, [`${nf.format(pairs.sites[i])} site${pairs.sites[i] === 1 ? '' : 's'}`,
-      `${nf.format(Math.round(pairs.pop[i]))} residents`, 'Click to show on the map']);
+    tip(e.clientX, e.clientY, [tp(pairs.sites[i], '{n} site', '{n} sites'),
+      t('{n} residents', { n: nf.format(Math.round(pairs.pop[i])) }), t('Click to show on the map')]);
     if (i !== current) { current = i; onHover(i); }
   });
   over.addEventListener('pointerleave', () => { og.clearRect(0, 0, W, H); current = -1; hideTip(); onHover(-1); });
