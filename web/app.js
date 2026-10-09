@@ -9,6 +9,8 @@ import { terrainSource, registerTileProtocol, antennaImages } from './terrain.js
 import { detectProxy, geoUrl, transformRequest } from './remote.js';
 
 const $ = (id) => document.getElementById(id);
+const canHover = matchMedia('(hover: hover)').matches; // touch screens: a tap selects; no hover tooltips
+const press = canHover ? 'Click' : 'Tap';
 
 // A message in place of the loading card when the map cannot start.
 function showFatal(...parts) {
@@ -658,7 +660,7 @@ function paint() {
     res.textContent = 'Counts are averaged per inhabited hectare; the surface fades where few hectares are inhabited.';
     computeSmooth();
   } else {
-    res.textContent = g.s === 100 ? 'Showing 100 m hectares. Click one for details.'
+    res.textContent = g.s === 100 ? `Showing 100 m hectares. ${press} one for details.`
       : CLASSES.m.kind === 'class' ? 'This attribute is shown at 100 m only. Zoom in.'
         : `Showing ${blockLabel(g.s)} blocks; counts are averaged per inhabited hectare. Zoom in for hectares.`;
   }
@@ -984,7 +986,6 @@ function blockAt(s, E, Nn) {
   return b === undefined ? -1 : b;
 }
 
-const canHover = matchMedia('(hover: hover)').matches; // touch screens: a tap selects; no hover tooltips
 function onHover(info) {
   if (isTerrain() || !canHover) return; // MapLibre handles pointer events on the terrain (see terrain section)
   const canvas = map.getCanvas();
@@ -1305,7 +1306,7 @@ function renderLegend() {
     box.append(b);
   }
   const note = el('div', 'legend-note', state.smooth ? 'Hectare counts per class, before smoothing.'
-    : m.breaks || m.kind === 'class' ? 'Click a class to show only it.' : 'Each class holds a similar number of hectares. Click one to show only it.');
+    : m.breaks || m.kind === 'class' ? `${press} a class to show only it.` : `Each class holds a similar number of hectares. ${press} one to show only it.`);
   box.append(note);
   $('metric-desc').textContent = m.desc || '';
 }
@@ -2102,7 +2103,7 @@ function renderAnalysis() {
   const caption = el('caption', 'sr-only', 'Correlation by grid size; choose a size to plot it');
   table.append(caption, thead, tbody);
   s2.append(table);
-  s2.append(el('p', 'note', 'Residents vs sites per grid cell; cells with neither are left out. Larger cells correlate more strongly. Click a row to plot it.'));
+  s2.append(el('p', 'note', `Residents vs sites per grid cell; cells with neither are left out. Larger cells correlate more strongly. ${press} a row to plot it.`));
   body.append(s2);
 
   const s = state.analysisScale, sc = R.byScale[s];
