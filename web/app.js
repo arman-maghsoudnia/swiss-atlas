@@ -1608,16 +1608,23 @@ function setCollapsed(collapsed) {
   $('collapse').setAttribute('aria-expanded', String(!collapsed));
   $('collapse').title = collapsed ? 'Expand panel' : 'Collapse panel';
 }
-// On phones the detail/analysis sheet covers the lower half: fold the panel away and, if the selection
-// is now hidden, move the map so it sits in the visible strip above the sheet.
+// Opening the detail/analysis panel: fold the controls away when the two panels would leave little map
+// (phones, where the sheet covers the lower half, and tablets or small windows), then move the map if
+// the selection is now hidden, so it sits in the visible part.
 function makeRoomFor(sheet) {
-  if (!narrow()) return;
-  setCollapsed(true);
+  const side = $(sheet).getBoundingClientRect();
+  if (narrow() || side.left - $('panel').getBoundingClientRect().right < 320) setCollapsed(true);
   const c = center();
   if (!c) return;
-  const p = map.project(lv95ToWgs(c[0], c[1]));
-  const top = $('panel').getBoundingClientRect().bottom + 8, bottom = $(sheet).getBoundingClientRect().top - 8;
-  if (p.y < top || p.y > bottom) map.panBy([0, p.y - (top + bottom) / 2], { duration: 400 });
+  const p = map.project(lv95ToWgs(c[0], c[1])), panel = $('panel').getBoundingClientRect();
+  const m = 48; // keep the selection this far from the panel edges
+  if (narrow()) { // visible strip between the folded panel and the sheet
+    const top = panel.bottom, bottom = side.top;
+    if (p.y < top + m || p.y > bottom - m) map.panBy([0, p.y - (top + bottom) / 2], { duration: 400 });
+  } else { // visible area left of the side panel (and right of the controls when they are open)
+    const left = $('panel').classList.contains('collapsed') ? 0 : panel.right, right = side.left;
+    if (p.x < left + m || p.x > right - m) map.panBy([p.x - (left + right) / 2, 0], { duration: 400 });
+  }
 }
 // Focus: a panel opened from a control (search, buttons) takes focus and gives it back on close;
 // one opened by clicking the map leaves focus alone.
@@ -1956,7 +1963,7 @@ function openAnalysis() {
   syncSide();
   renderAnalysis();
   render();
-  if (narrow()) setCollapsed(true);
+  makeRoomFor('analysis');
   takeFocus('analysis');
 }
 function closeAnalysis() {
