@@ -188,6 +188,21 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
   });
 
+  test('commune: sums the hectares inside the boundary, outlines it, goes into the URL and the CSV', async () => {
+    const ev = page.ev;
+    await ev(`document.querySelector('[data-scope="commune"]').click()`);
+    assert.ok(await page.waitFor(`document.getElementById('d-title').textContent === 'Testwil (ZH)'`, 30_000), 'boundary loaded');
+    assert.match(await ev(`document.getElementById('d-sub').textContent`), /^[\d'’,]+ inhabited hectares · [\d'’,]+ residents\/km²$/);
+    assert.equal(await ev(`document.querySelectorAll('#detail .tile').length`), 6);
+    assert.match(await ev(`location.hash`), /sel=2683100,1247100&sc=commune/);
+    await ev(`[...document.querySelectorAll('#detail .link-btn')].find((b) => b.textContent === 'Download as CSV').click()`);
+    assert.ok(await page.waitFor(`window.__files.length === 1`, 5000), 'CSV saved');
+    const [csv] = await ev(`Promise.all(window.__files).then((f) => { window.__files = []; return f; })`);
+    assert.match(new TextDecoder().decode(new Uint8Array(csv.bytes)), /\r\n"Commune Testwil \(ZH\), FSO no\. 9999, as of 1 January 2025",BBTOT,/);
+    await ev(`document.querySelector('[data-scope="cell"]').click()`);
+    assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
+  });
+
   test('phone: folded panel, collapsed credits, details as a sheet', async () => {
     await page.ev(`localStorage.removeItem('spg-settings')`).catch(() => {});
     await load(375, 812, true);
@@ -209,6 +224,12 @@ const SEARCH_RESULT = { results: [{ attrs: {
   label: '<b>Bahnhofstrasse 1</b> 8001 Zürich', origin: 'address', lat: 47.36975, lon: 8.53913,
   geom_st_box2d: 'BOX(8.53913 47.36975,8.53913 47.36975)',
 } }] };
+
+// A made-up 1.5 km square commune around the searched address, as swisstopo's identify answers.
+const COMMUNE_RESULT = { results: [{ featureId: '9999-2025', id: '9999-2025',
+  properties: { gemname: 'Testwil', kanton: 'ZH', gde_nr: 9999, jahr: 2025, gemflaeche: 225 },
+  geometry: { type: 'Polygon', coordinates: [[[2682400, 1246400], [2683900, 1246400], [2683900, 1247900], [2682400, 1247900], [2682400, 1246400]]] },
+}] };
 
 // One page over the DevTools protocol, with geo.admin.ch blocked and the basemap set to "None".
 async function openPage(port) {
@@ -232,12 +253,13 @@ async function openPage(port) {
       errors.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text);
     } else if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
       errors.push(m.params.args.map((a) => a.value ?? a.description).join(' '));
-    } else if (m.method === 'Fetch.requestPaused') { // geo.admin.ch: a canned search answer, 503 for the rest
-      const search = m.params.request.url.includes('/SearchServer');
+    } else if (m.method === 'Fetch.requestPaused') { // geo.admin.ch: canned search and boundary answers, 503 for the rest
+      const { url } = m.params.request;
+      const canned = url.includes('/SearchServer') ? SEARCH_RESULT : url.includes('/identify') && url.includes('returnGeometry=true') ? COMMUNE_RESULT : null;
       send('Fetch.fulfillRequest', {
-        requestId: m.params.requestId, responseCode: search ? 200 : 503,
+        requestId: m.params.requestId, responseCode: canned ? 200 : 503,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
-        body: search ? Buffer.from(JSON.stringify(SEARCH_RESULT)).toString('base64') : '',
+        body: canned ? Buffer.from(JSON.stringify(canned)).toString('base64') : '',
       }).catch(() => {});
     }
   });

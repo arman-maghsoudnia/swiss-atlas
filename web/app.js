@@ -91,6 +91,7 @@ const DEFAULTS = {
   smooth: false, sigma: 300, analysisScale: 1000, exaggeration: 1.5,
   ant: { show: true, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
 };
+const SCOPES = ['cell', 'radius', 'commune', 'view']; // the details' Summarise options
 const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'site', 'sc', 'r']; // see writeHash()
 const saved = loadSettings();
 const state = {
@@ -107,7 +108,7 @@ if (!Object.hasOwn(ANT.TECH, state.ant.tech)) state.ant.tech = '';
 if (!Object.hasOwn(ANT.TYPE_GROUPS, state.ant.type)) state.ant.type = '';
 state.ant.ops = Array.isArray(state.ant.ops) && state.ant.ops.length === 5 ? state.ant.ops.map(Boolean) : [...DEFAULTS.ant.ops];
 if (!['2d', '3d', 'terrain'].includes(state.view)) state.view = '2d';
-if (!['cell', 'radius', 'view'].includes(state.scope)) state.scope = DEFAULTS.scope;
+if (!SCOPES.includes(state.scope)) state.scope = DEFAULTS.scope;
 const isTerrain = () => state.view === 'terrain';
 function loadSettings() {
   try { return JSON.parse(localStorage.getItem('spg-settings') || '{}'); } catch { return {}; }
@@ -146,7 +147,7 @@ function stateFromHash(h) {
   if (/^[01]{5}$/.test(h.op ?? '')) state.ant.ops = [...h.op].map((c) => c === '1');
   if (Object.hasOwn(ANT.TECH, h.t ?? '')) state.ant.tech = h.t;
   if (Object.hasOwn(ANT.TYPE_GROUPS, h.ty ?? '')) state.ant.type = h.ty;
-  if (['cell', 'radius', 'view'].includes(h.sc)) state.scope = h.sc;
+  if (SCOPES.includes(h.sc)) state.scope = h.sc;
   else if ('site' in h) state.scope = 'radius'; // a site opens on its radius summary
   if ([0.5, 1, 2, 5, 10, 20].includes(+h.r)) state.radiusKm = +h.r;
 }
@@ -926,6 +927,15 @@ function render() {
       updateTriggers: { getPosition: c.join(), getRadius: state.radiusKm, getFillColor: dark, getLineColor: dark },
     }));
   }
+  const cm = state.scope === 'commune' && !$('detail').hidden ? communeNow() : null;
+  if (cm) {
+    layers.push(new deck.PolygonLayer({
+      id: 'commune', data: cm.ll, getPolygon: (p) => p,
+      filled: true, getFillColor: [...ink.slice(0, 3), 18],
+      stroked: true, getLineColor: [...ink.slice(0, 3), 200], lineWidthUnits: 'pixels', getLineWidth: 1.5,
+      updateTriggers: { getFillColor: dark, getLineColor: dark },
+    }));
+  }
   const outlines = [];
   if (state.selected >= 0) outlines.push(squareRing(cellE(state.selected), cellN(state.selected), 100));
   if (state.hoverBlock) outlines.push(squareRing(state.hoverBlock.E, state.hoverBlock.N, state.hoverBlock.s));
@@ -1106,7 +1116,7 @@ function selectCell(i, pan = true) {
 function selectAntenna(i) {
   state.antenna = i;
   state.selected = cellAt(A.e[i], A.N[i]);
-  if (state.scope !== 'radius') state.scope = 'radius';
+  if (state.scope !== 'radius' && state.scope !== 'commune') state.scope = 'radius'; // a site's own hectare says little
   openDetail();
   writeHash();
 }
@@ -1280,6 +1290,8 @@ function renderTerrainOverlays() {
     const ring = circleRing(c[0], c[1], state.radiusKm * 1000);
     f.push({ type: 'Feature', properties: { kind: 'radius' }, geometry: { type: 'Polygon', coordinates: [ring] } });
   }
+  const cm = state.scope === 'commune' && !$('detail').hidden ? communeNow() : null;
+  if (cm) f.push({ type: 'Feature', properties: { kind: 'radius' }, geometry: { type: 'MultiPolygon', coordinates: cm.ll } }); // drawn as the circle
   if (state.selected >= 0) f.push({ type: 'Feature', properties: { kind: 'cell' }, geometry: { type: 'LineString', coordinates: squareRing(cellE(state.selected), cellN(state.selected), 100) } });
   if (state.hoverBlock) f.push({ type: 'Feature', properties: { kind: 'block' }, geometry: { type: 'LineString', coordinates: squareRing(state.hoverBlock.E, state.hoverBlock.N, state.hoverBlock.s) } });
   if (state.antenna >= 0) f.push({ type: 'Feature', properties: { kind: 'antenna' }, geometry: { type: 'Point', coordinates: [A.pos[2 * state.antenna], A.pos[2 * state.antenna + 1]] } });
@@ -1648,6 +1660,7 @@ function syncControls() {
   if ($('ant-body')) $('ant-body').hidden = !state.ant.show;
   document.querySelector('[data-scope="cell"]').disabled = state.selected < 0;
   document.querySelector('[data-scope="radius"]').disabled = !center();
+  document.querySelector('[data-scope="commune"]').disabled = !center();
   // Radio groups take one Tab stop (the checked option); arrow keys move within (see buildControls).
   document.querySelectorAll('.seg[role="radiogroup"]').forEach((g) => {
     const radios = [...g.querySelectorAll('[role="radio"]')];
@@ -1722,6 +1735,7 @@ const SECTIONS = [
 
 function scopeIndices() {
   if (state.scope === 'view') return viewIndices();
+  if (state.scope === 'commune') return communeNow()?.cells ?? [];
   if (state.scope === 'cell') return state.selected >= 0 ? [state.selected] : [];
   const [cE, cN] = center(), R = state.radiusKm * 1000, R2 = R * R, out = [];
   for (let j = 0; j < N; j++) {
@@ -1733,6 +1747,7 @@ function scopeIndices() {
 function scopeSites() {
   if (!A) return [];
   if (state.scope === 'view') return viewSites();
+  if (state.scope === 'commune') { const cm = communeNow(); return cm ? SITES.filter((i) => cm.inA[i]) : []; }
   if (state.scope === 'radius') { const [cE, cN] = center(); return ANT.within(A, AIDX, cE, cN, state.radiusKm * 1000); }
   const i = state.selected;
   if (i < 0) return [];
@@ -1923,6 +1938,7 @@ function detailCsv() {
     const { lng, lat } = map.getCenter();
     area = `Map view around ${lat.toFixed(4)} N ${lng.toFixed(4)} E, zoom ${map.getZoom().toFixed(1)}`;
   } else if (scope === 'radius') area = `Within ${fmtKm(state.radiusKm)} of ${place} (LV95)`;
+  else if (scope === 'commune') { const cm = communeNow(); area = cm ? `Commune ${cm.name}, FSO no. ${cm.bfs}, as of 1 January ${cm.year}` : 'Commune (not loaded)'; }
   else if (ai >= 0) area = `Hectare of ${place} (LV95)`;
   else {
     const name = $('d-title').textContent;
@@ -2010,24 +2026,107 @@ async function lookupCommune(E, Nn, target, stillValid, fallback = '') {
   const key = `${Math.floor(E / 100)}:${Math.floor(Nn / 100)}`;
   const show = (txt) => { if (stillValid()) target.textContent = txt; };
   if (communeCache.has(key)) { show(communeCache.get(key)); return; }
+  const known = boundaryOf(E, Nn); // a commune boundary already loaded
+  if (known) { show(known.name); return; }
   lookupCtl?.abort();
   lookupCtl = new AbortController();
   try {
-    const url = geoUrl('https://api3.geo.admin.ch/rest/services/api/MapServer/identify?' + new URLSearchParams({
-      geometry: `${E},${Nn}`, geometryType: 'esriGeometryPoint', sr: '2056', tolerance: '0', returnGeometry: 'false',
-      layers: 'all:ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill', lang: 'en',
-    }));
-    const res = await fetch(url, { signal: lookupCtl.signal });
-    if (!res.ok) throw new Error(`commune lookup: HTTP ${res.status}`);
-    const json = await res.json();
-    const hit = (json.results || []).find((r) => r.attributes?.is_current_jahr) || json.results?.[0];
-    const a = hit?.attributes;
-    const name = a ? (a.gemname.includes(`(${a.kanton})`) ? a.gemname : `${a.gemname} (${a.kanton})`) : 'Commune unknown';
+    const hit = await identifyCommune(E, Nn, false, lookupCtl.signal);
+    const name = hit ? communeName(hit.attributes) : 'Commune unknown';
     communeCache.set(key, name);
     show(name);
   } catch (e) {
     if (e.name !== 'AbortError') show(fallback);
   }
+}
+
+// ---------------------------------------------------------------- communes
+// swissBOUNDARIES3D as on 1 January after the data's reference date (STATPOP 2024: 31 Dec 2024, so
+// 2025): the communes the FSO counted in. Without a year the API answers with every year since 1850.
+async function identifyCommune(E, Nn, geometry, signal) {
+  const now = new Date().getFullYear();
+  for (const year of new Set([META.year + 1, now, now - 1])) { // later years, should that one be missing
+    const url = geoUrl('https://api3.geo.admin.ch/rest/services/api/MapServer/identify?' + new URLSearchParams({
+      geometry: `${E},${Nn}`, geometryType: 'esriGeometryPoint', sr: '2056', tolerance: '0', timeInstant: String(year),
+      returnGeometry: String(geometry), geometryFormat: 'geojson', layers: 'all:ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill', lang: 'en',
+    }));
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`commune lookup: HTTP ${res.status}`);
+    const hit = (await res.json()).results?.[0];
+    if (hit) return { ...hit, attributes: hit.attributes || hit.properties };
+  }
+  return null;
+}
+const communeName = (a) => (a.gemname.includes(`(${a.kanton})`) ? a.gemname : `${a.gemname} (${a.kanton})`);
+
+// The commune scope: hectares (and antenna sites) whose centre lies inside the selection's commune.
+const boundaries = new Map(); // featureId -> boundary
+let COMMUNE = null;           // { at, status: 'loading' | 'ok' | 'none' | 'error', ...boundary }
+let communeCtl = null;
+const pointKey = (E, Nn) => `${Math.floor(E / 100)}:${Math.floor(Nn / 100)}`;
+function boundaryFrom(hit) {
+  const g = hit.geometry, a = hit.attributes;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; // [[outer, ...holes], …], LV95
+  const rings = polys.flat();
+  let e0 = Infinity, n0 = Infinity, e1 = -Infinity, n1 = -Infinity;
+  for (const [x, y] of polys.flatMap((p) => p[0])) { e0 = Math.min(e0, x); n0 = Math.min(n0, y); e1 = Math.max(e1, x); n1 = Math.max(n1, y); }
+  const inside = (x, y) => { // even-odd rule over all rings, so holes (enclaves) are left out
+    if (x < e0 || x > e1 || y < n0 || y > n1) return false;
+    let c = false;
+    for (const r of rings) {
+      for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
+        const [xk, yk] = r[k], [xj, yj] = r[j];
+        if ((yk > y) !== (yj > y) && x < ((xj - xk) * (y - yk)) / (yj - yk) + xk) c = !c;
+      }
+    }
+    return c;
+  };
+  const cells = [];
+  for (let i = 0; i < N; i++) if (inside(cellE(i) + 50, cellN(i) + 50)) cells.push(i);
+  const inA = new Uint8Array(A ? A.n : 0);
+  for (let i = 0; i < inA.length; i++) inA[i] = inside(A.e[i], A.N[i]) ? 1 : 0;
+  return {
+    id: hit.featureId ?? hit.id, name: communeName(a), bfs: a.gde_nr, year: a.jahr, km2: a.gemflaeche / 100, inside, cells, inA,
+    ll: polys.map((p) => p.map((r) => r.map(([x, y]) => lv95ToWgs(x, y)))),
+  };
+}
+function boundaryOf(E, Nn) {
+  for (const b of boundaries.values()) if (b.inside(E, Nn)) return b;
+  return null;
+}
+// The loaded commune for the current selection, or null (see ensureCommune).
+function communeNow() {
+  const c = center();
+  return c && COMMUNE?.status === 'ok' && COMMUNE.at === pointKey(c[0], c[1]) ? COMMUNE : null;
+}
+function ensureCommune() {
+  const c = center();
+  if (!c || !N) return;
+  const at = pointKey(c[0], c[1]);
+  if (COMMUNE?.at === at) return;
+  const known = boundaryOf(c[0], c[1]);
+  if (known) { COMMUNE = { ...known, at, status: 'ok' }; return; }
+  COMMUNE = { at, status: 'loading' };
+  communeCtl?.abort();
+  communeCtl = new AbortController();
+  const done = (next) => {
+    if (COMMUNE?.at !== at) return;
+    COMMUNE = next;
+    renderDetail();
+    render();
+    if (next.status === 'ok') announce(`${next.name}: commune boundary loaded`);
+  };
+  identifyCommune(c[0], c[1], true, communeCtl.signal).then((hit) => {
+    if (!hit?.geometry) { done({ at, status: 'none' }); return; }
+    const b = boundaryFrom(hit);
+    boundaries.set(b.id, b);
+    if (boundaries.size > 20) boundaries.delete(boundaries.keys().next().value);
+    done({ ...b, at, status: 'ok' });
+  }, (e) => {
+    if (e.name === 'AbortError') return;
+    console.warn(e);
+    done({ at, status: 'error' });
+  });
 }
 
 function renderDetail() {
@@ -2037,6 +2136,8 @@ function renderDetail() {
   $('d-sub').title = '';
   const scope = state.scope;
   const isCell = scope === 'cell';
+  if (scope === 'commune') ensureCommune();
+  const cm = scope === 'commune' ? communeNow() : null;
   const idx = scopeIndices();
   const { sums, cells } = aggregate(idx);
   const i = state.selected, ai = state.antenna;
@@ -2049,11 +2150,15 @@ function renderDetail() {
     $('d-sub').append(commune);
     lookupCommune(A.e[ai], A.N[ai], commune, () => state.antenna === ai);
     body.append(antennaProps(ai));
-    const h = el('h3', 'scope-h', scope === 'view' ? 'Current map view' : isCell ? 'This site\'s hectare' : `Within ${fmtKm(state.radiusKm)} of this site`);
+    const h = el('h3', 'scope-h', scope === 'view' ? 'Current map view' : isCell ? 'This site\'s hectare'
+      : scope === 'commune' ? (cm ? `Its commune: ${cm.name}` : 'Its commune') : `Within ${fmtKm(state.radiusKm)} of this site`);
     body.append(h);
   } else if (scope === 'view') {
     $('d-title').textContent = 'Current map view';
     $('d-sub').textContent = `${nf.format(cells)} inhabited hectares`;
+  } else if (scope === 'commune') {
+    $('d-title').textContent = cm ? cm.name : COMMUNE?.status === 'loading' ? 'Loading commune…' : 'Commune';
+    $('d-sub').textContent = cm ? `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / cm.km2))} residents/km²` : '';
   } else if (isCell) {
     $('d-title').textContent = 'Loading commune…';
     $('d-sub').textContent = `E ${fmtCoord(cellE(i))} · N ${fmtCoord(cellN(i))} (LV95)`;
@@ -2063,6 +2168,14 @@ function renderDetail() {
     const areaKm2 = Math.PI * state.radiusKm ** 2;
     $('d-title').textContent = `Within ${fmtKm(state.radiusKm)}`;
     $('d-sub').textContent = `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / areaKm2))} residents/km²`;
+  }
+  if (scope === 'commune' && !cm) {
+    body.append(el('p', 'note', COMMUNE?.status === 'loading' ? 'Loading the commune boundary from geo.admin.ch…'
+      : COMMUNE?.status === 'none' ? 'No commune here (a lake, or outside Switzerland).' : 'Could not load the commune boundary from geo.admin.ch.'));
+    return;
+  }
+  if (ai >= 0 && scope === 'commune') {
+    body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / cm.km2))} residents/km²`));
   }
   if (ai >= 0 && scope === 'radius') {
     body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / (Math.PI * state.radiusKm ** 2)))} residents/km²`));
@@ -2119,6 +2232,9 @@ function renderDetail() {
     a.target = '_blank';
     a.rel = 'noopener';
     links.append(a);
+  }
+  if (cm) {
+    body.append(el('p', 'note', `Hectares whose centre lies in ${cm.name} as of 1 January ${cm.year} (swissBOUNDARIES3D).`));
   }
   if (!isCell) {
     body.append(el('p', 'note', 'Sums of hectare values. Counts of 1–3 are published as 3, so totals run slightly high.'));
