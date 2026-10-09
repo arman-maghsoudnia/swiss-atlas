@@ -1845,7 +1845,10 @@ function download(name, blob) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
 }
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { // the visitor's date (toISOString() gives the UTC one: yesterday until 01:00 or 02:00 in Switzerland)
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 
 // The map as a PNG, with a footer that names what it shows and credits the sources, as their terms
 // ask. WebGL does not keep a frame once it is on screen, so the canvas is copied in the frame itself.
