@@ -761,7 +761,7 @@ const map = new maplibregl.Map({
   fitBoundsOptions: { padding: narrow() ? { top: 84, bottom: 40, left: 8, right: 8 } : { top: 40, bottom: 40, left: 372, right: 60 } },
   minZoom: 5.5,
   maxZoom: 18,
-  maxPitch: 70,
+  maxPitch: isTerrain() ? 80 : 70, // as setView(); a lower limit would reject a terrain link's map= (pitch > 70)
   maxBounds: [[2.5, 43], [14, 50.6]], // tall enough for a portrait phone to show the whole country
   hash: 'map',
   attributionControl: false,
