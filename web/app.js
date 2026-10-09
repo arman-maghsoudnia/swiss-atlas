@@ -1506,6 +1506,7 @@ function buildControls() {
     const show = $('ant-show');
     show.checked = state.ant.show;
     show.addEventListener('change', () => { state.ant.show = show.checked; syncControls(); updateTerrainAntennas(); render(); updateViewStats(); saveSettings(); });
+    if (A.generated) $('ant-date').textContent = `OFCOM data of ${fmtDate(A.generated.slice(0, 10))}. `;
     const ops = $('ant-ops');
     A.operatorLabels.forEach((label, k) => {
       const lab = el('label', 'check');

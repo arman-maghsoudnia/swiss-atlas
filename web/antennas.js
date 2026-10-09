@@ -37,7 +37,7 @@ export async function loadAntennas(source) {
   const j = await res.json();
   const n = j.count;
   const A = {
-    n, operators: j.operators, operatorLabels: j.operatorLabels,
+    n, operators: j.operators, operatorLabels: j.operatorLabels, generated: j.generated,
     // Display forms: "Outdoor > 6 W" (ERP is jargon), "Medium (≤ 5 kW)" rather than "medium (≤ 5,000 W)".
     types: j.types.map((t) => t.replace(/ ERP$/, '')),
     powers: j.powers.map((p) => (p[0].toUpperCase() + p.slice(1)).replace(/(\d+),000 W/, '$1 kW')),

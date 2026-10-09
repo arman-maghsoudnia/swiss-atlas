@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'  # Mondays, for OFCOM's antenna updates (see below)
 
 permissions:
   contents: read
@@ -25,6 +27,16 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+      # OFCOM updates the antenna sites every few days, so each deploy converts the current file. If the
+      # download or the conversion fails, or the result looks wrong, the committed copy is published.
+      - name: Refresh the antenna sites from OFCOM
+        continue-on-error: true
+        run: |
+          curl -fsSL --retry 3 --max-time 300 -o "$RUNNER_TEMP/ofcom.json" \
+            https://data.geo.admin.ch/ch.bakom.standorte-mobilfunkanlagen/standorte-mobilfunkanlagen/standorte-mobilfunkanlagen_2056.json
+          python3 scripts/build_antennas.py --src "$RUNNER_TEMP/ofcom.json" --out "$RUNNER_TEMP/antennas.json"
+          python3 -c "import json, sys; n = json.load(open(sys.argv[1]))['count']; print(n, 'sites'); assert n > 15000" "$RUNNER_TEMP/antennas.json"
+          mv "$RUNNER_TEMP/antennas.json" web/data/antennas.json
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

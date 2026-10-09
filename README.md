@@ -78,7 +78,7 @@ No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild,
 
 # Hosting on GitHub Pages
 
-`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow.
+`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow. Each deploy also converts OFCOM's current antenna file, and a weekly run (Mondays) picks up their updates. If that fails, the committed `web/data/antennas.json` is published instead. The panel shows the date of the antenna data.
 
 # Deployment (nginx)
 
