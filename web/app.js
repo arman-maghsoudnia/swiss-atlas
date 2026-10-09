@@ -852,6 +852,10 @@ function antennaLayers(dark) {
   return layers;
 }
 
+// Column heights follow the zoom (×1 at zoom 11, halved per level in, doubled per level out, within
+// ±3 levels): hectares of 300 residents would otherwise be kilometre-high walls in a city, and 2 km
+// blocks (averages per hectare) flat when zoomed out.
+const columnScale = () => 2 ** Math.max(-3, Math.min(3, 11 - map.getZoom()));
 function render() {
   if (!COLORS) return;
   if (isTerrain()) { overlay.setProps({ layers: [] }); renderTerrainOverlays(); return; }
@@ -873,7 +877,7 @@ function render() {
       data: CELL_DATA,
       cellSize: GRID.s,
       extruded: state.view === '3d',
-      elevationScale: state.heightScale,
+      elevationScale: state.heightScale * columnScale(),
       opacity: state.opacity,
       pickable: true,
       autoHighlight: true,
@@ -936,7 +940,7 @@ let lastLevel = 0, zoomRaf = 0;
 map.on('zoom', () => {
   const lvl = levelForZoom(map.getZoom());
   if (CLASSES && lvl !== lastLevel) { lastLevel = lvl; hideTip(); paint(); return; }
-  if (A && state.ant.show && !zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; render(); }); // marker size follows zoom
+  if (((A && state.ant.show) || state.view === '3d') && !zoomRaf) zoomRaf = requestAnimationFrame(() => { zoomRaf = 0; render(); }); // marker size and column height follow zoom
 });
 
 function setBasemap(key) {
@@ -1598,7 +1602,8 @@ function syncControls() {
   setSeg('data-view', state.view);
   setSeg('data-scope', state.scope);
   $('minpop-out').textContent = state.minPop;
-  $('height-out').textContent = state.heightScale;
+  $('height-out').textContent = `${state.heightScale}×`;
+  $('height').setAttribute('aria-valuetext', `${state.heightScale} times`);
   $('height-row').hidden = state.view !== '3d' || state.smooth;
   $('exag-row').hidden = !isTerrain();
   $('exag-out').textContent = `${state.exaggeration.toFixed(1)}×`;
