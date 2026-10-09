@@ -1072,11 +1072,11 @@ function onClick(info) {
   map.flyTo({ center: [GRID.center[2 * i], GRID.center[2 * i + 1]], zoom: Math.max(map.getZoom() + 2, 12.3), duration: 900 });
 }
 
-function selectCell(i) {
+function selectCell(i, pan = true) {
   state.selected = i;
   state.antenna = -1;
   if (state.scope === 'view') state.scope = 'cell';
-  openDetail();
+  openDetail(pan);
   writeHash();
 }
 function selectAntenna(i) {
@@ -1736,7 +1736,7 @@ async function shareView() {
   } catch (e) {
     if (e.name === 'AbortError') return; // share sheet dismissed
   }
-  prompt('Copy the link to this view:', url);
+  try { prompt('Copy the link to this view:', url); } catch { toast('Copy the link from the address bar'); } // no dialogs in some embeds
 }
 let toastTimer = 0;
 function toast(msg) {
@@ -1752,22 +1752,25 @@ function setCollapsed(collapsed) {
   $('collapse').setAttribute('aria-expanded', String(!collapsed));
   $('collapse').title = collapsed ? 'Expand panel' : 'Collapse panel';
 }
+// The part of the map that no panel covers, in map-container pixels (sheet: an open side panel).
+function freeArea(sheet) {
+  const box = map.getContainer().getBoundingClientRect(), panel = $('panel').getBoundingClientRect();
+  const side = sheet && !$(sheet).hidden ? $(sheet).getBoundingClientRect() : null;
+  if (narrow()) return { left: 0, right: box.width, top: panel.bottom - box.top, bottom: (side ? side.top : box.bottom) - box.top };
+  const open = !$('panel').classList.contains('collapsed');
+  return { left: open ? panel.right - box.left : 0, right: (side ? side.left : box.right) - box.left, top: 0, bottom: box.height };
+}
 // Opening the detail/analysis panel: fold the controls away when the two panels would leave little map
-// (phones, where the sheet covers the lower half, and tablets or small windows), then move the map if
-// the selection is now hidden, so it sits in the visible part.
-function makeRoomFor(sheet) {
+// (phones, where the sheet covers the lower half, and tablets or small windows), then, unless the caller
+// moves the map itself, pan so that the selection sits in the free area, away from the panel edges.
+function makeRoomFor(sheet, pan = true) {
   const side = $(sheet).getBoundingClientRect();
   if (narrow() || side.left - $('panel').getBoundingClientRect().right < 320) setCollapsed(true);
   const c = center();
-  if (!c) return;
-  const p = map.project(lv95ToWgs(c[0], c[1])), panel = $('panel').getBoundingClientRect();
-  const m = 48; // keep the selection this far from the panel edges
-  if (narrow()) { // visible strip between the folded panel and the sheet
-    const top = panel.bottom, bottom = side.top;
-    if (p.y < top + m || p.y > bottom - m) map.panBy([0, p.y - (top + bottom) / 2], { duration: 400 });
-  } else { // visible area left of the side panel (and right of the controls when they are open)
-    const left = $('panel').classList.contains('collapsed') ? 0 : panel.right, right = side.left;
-    if (p.x < left + m || p.x > right - m) map.panBy([p.x - (left + right) / 2, 0], { duration: 400 });
+  if (!c || !pan) return;
+  const p = map.project(lv95ToWgs(c[0], c[1])), f = freeArea(sheet), m = 48;
+  if (p.x < f.left + m || p.x > f.right - m || p.y < f.top + m || p.y > f.bottom - m) {
+    map.panBy([p.x - (f.left + f.right) / 2, p.y - (f.top + f.bottom) / 2], { duration: 400 });
   }
 }
 // Focus: a panel opened from a control (search, buttons) takes focus and gives it back on close;
@@ -1786,14 +1789,14 @@ function giveBackFocus(id) {
   queueMicrotask(() => back.focus({ preventScroll: true }));
 }
 const syncSide = () => document.body.classList.toggle('side-open', !$('detail').hidden || !$('analysis').hidden);
-function openDetail() {
+function openDetail(pan = true) {
   $('analysis').hidden = true;
   $('detail').hidden = false;
   syncSide();
   syncControls();
   renderDetail();
   render();
-  makeRoomFor('detail');
+  makeRoomFor('detail', pan);
   takeFocus('detail');
 }
 function closeDetail() {
@@ -2238,13 +2241,18 @@ function setupSearch() {
     cancel();
     input.value = r.label;
     close();
+    if (narrow()) setCollapsed(true); // the expanded panel would hide the result
     const box = /BOX\(([-\d.]+) ([-\d.]+),([-\d.]+) ([-\d.]+)\)/.exec(r.box || '');
     if (box && Math.abs(box[3] - box[1]) > 0.002) {
-      map.fitBounds([[+box[1], +box[2]], [+box[3], +box[4]]], { padding: 60, maxZoom: 15, duration: 1200 });
-    } else {
-      map.flyTo({ center: [r.lon, r.lat], zoom: 15.5, duration: 1200 });
+      const f = freeArea(null), { width, height } = map.getContainer().getBoundingClientRect();
+      map.fitBounds([[+box[1], +box[2]], [+box[3], +box[4]]], {
+        padding: { left: f.left + 30, right: width - f.right + 30, top: f.top + 30, bottom: height - f.bottom + 30 }, maxZoom: 15, duration: 1200,
+      });
+    } else { // an address: select its hectare, then fly so that it lands in the part the panels leave free
       const i = cellAt(...wgsToLv95(r.lon, r.lat));
-      if (i >= 0) selectCell(i);
+      if (i >= 0) selectCell(i, false); // no extra pan: it would cut the flight short
+      const f = freeArea(i >= 0 ? 'detail' : null), { width, height } = map.getContainer().getBoundingClientRect();
+      map.flyTo({ center: [r.lon, r.lat], zoom: 15.5, offset: [(f.left + f.right - width) / 2, (f.top + f.bottom - height) / 2], duration: 1200 });
     }
   };
   const search = async (q) => {
