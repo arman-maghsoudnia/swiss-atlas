@@ -330,8 +330,20 @@ function parts(src, g) {
   if (src.type === 'none') return { num: new Float32Array(g.n).fill(NaN), den: new Float32Array(g.n).fill(1) };
   throw new Error(src.type);
 }
+// Numerator and denominator per hectare, for a few recent metrics. Coarser grids sum these once,
+// instead of summing every input column per block (38 columns for the age metrics).
+const partsCache = new Map();
+function baseParts(m) {
+  const key = metricKey(m);
+  let b = partsCache.get(key);
+  if (!b) {
+    partsCache.set(key, (b = parts(m.src, gridFor(100))));
+    if (partsCache.size > 4) partsCache.delete(partsCache.keys().next().value);
+  }
+  return b;
+}
 function computeMetric(m, g) {
-  const { num, den } = parts(m.src, g);
+  const b = baseParts(m), num = g.sum(b.num), den = g.sum(b.den); // g.sum is the identity at 100 m
   const out = new Float32Array(g.n), clamp = m.kind === 'share' || m.kind === 'diverging';
   for (let i = 0; i < g.n; i++) {
     const v = den[i] > 0 ? num[i] / den[i] : NaN;
@@ -612,7 +624,7 @@ function computeSmooth() {
   const surfKey = `${metricKey(m)}|${state.sigma}`;
   if (SURF?.key !== surfKey) {
     SURF = null; // let the old surface go before allocating the new one
-    const { num, den } = parts(m.src, gridFor(100));
+    const { num, den } = baseParts(m);
     const layers = { num, den, sup: inhabitedIndicator() };
     if (rate) layers.pop = Float32Array.from(col('BBTOT'));
     const pts = { n: N, E: (i) => cellE(i) + 50, N: (i) => cellN(i) + 50 };
