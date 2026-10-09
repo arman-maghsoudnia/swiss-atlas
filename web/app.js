@@ -2073,7 +2073,7 @@ function boundaryFrom(hit) {
   const inA = new Uint8Array(A ? A.n : 0);
   for (let i = 0; i < inA.length; i++) inA[i] = inside(A.e[i], A.N[i]) ? 1 : 0;
   return {
-    id: hit.featureId ?? hit.id, name: communeName(a), bfs: a.gde_nr, year: a.jahr, km2: a.gemflaeche / 100, inside, cells, inA,
+    id: hit.featureId ?? hit.id, name: communeName(a), bfs: a.gde_nr, year: a.jahr, inside, cells, inA,
     ll: polys.map((p) => p.map((r) => r.map(([x, y]) => lv95ToWgs(x, y)))),
   };
 }
@@ -2145,7 +2145,7 @@ function renderDetail() {
     $('d-sub').textContent = `${nf.format(cells)} inhabited hectares`;
   } else if (scope === 'commune') {
     $('d-title').textContent = cm ? cm.name : COMMUNE?.status === 'loading' ? 'Loading commune…' : 'Commune';
-    $('d-sub').textContent = cm ? `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / cm.km2))} residents/km²` : '';
+    $('d-sub').textContent = cm ? `${nf.format(cells)} inhabited hectares` : ''; // no density: the boundaries include lakes
   } else if (isCell) {
     $('d-title').textContent = 'Loading commune…';
     $('d-sub').textContent = `E ${fmtCoord(cellE(i))} · N ${fmtCoord(cellN(i))} (LV95)`;
@@ -2162,7 +2162,7 @@ function renderDetail() {
     return;
   }
   if (ai >= 0 && scope === 'commune') {
-    body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / cm.km2))} residents/km²`));
+    body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares`));
   }
   if (ai >= 0 && scope === 'radius') {
     body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / (Math.PI * state.radiusKm ** 2)))} residents/km²`));
@@ -2573,8 +2573,18 @@ function setupSearch() {
     close();
     if (narrow()) setCollapsed(true); // the expanded panel would hide the result
     const box = /BOX\(([-\d.]+) ([-\d.]+),([-\d.]+) ([-\d.]+)\)/.exec(r.box || '');
+    let open = null;
+    if (r.origin === 'gg25' && N) { // a commune: open its summary, anchored on the inhabited hectare nearest its centre
+      const [E, Nn] = wgsToLv95(r.lon, r.lat);
+      let best = -1, bestD = Infinity;
+      for (let j = 0; j < N; j++) {
+        const d = (cellE(j) + 50 - E) ** 2 + (cellN(j) + 50 - Nn) ** 2;
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (best >= 0) { state.scope = 'commune'; selectCell(best, false); open = 'detail'; }
+    }
     if (box && Math.abs(box[3] - box[1]) > 0.002) {
-      const f = freeArea(null), { width, height } = map.getContainer().getBoundingClientRect();
+      const f = freeArea(open), { width, height } = map.getContainer().getBoundingClientRect();
       map.fitBounds([[+box[1], +box[2]], [+box[3], +box[4]]], {
         padding: { left: f.left + 30, right: width - f.right + 30, top: f.top + 30, bottom: height - f.bottom + 30 }, maxZoom: 15, duration: 1200,
       });
