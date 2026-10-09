@@ -7,7 +7,7 @@ import * as ANT from './antennas.js';
 import { blockPairs, correlate, distanceCurve, cdfChart, scatterChart } from './analysis.js';
 import { terrainSource, registerTileProtocol, antennaImages } from './terrain.js';
 import { detectProxy, geoUrl, transformRequest } from './remote.js';
-import { t, tp, lang, locale, LINKS, fmtFixed, fmtNum, fmtPct, fmtDate, translatePage, setLang } from './i18n.js';
+import { t, tp, isOne, lang, locale, LINKS, fmtFixed, fmtNum, fmtPct, fmtDate, translatePage, setLang } from './i18n.js';
 
 translatePage();
 document.title = t('Swiss atlas – population and mobile antennas');
@@ -558,23 +558,25 @@ function computeBreaks(m, values, valid) {
   return { breaks: b, zeroClass };
 }
 
-const unitOf = (m) => (m.unit === 'm' ? 'm' : t(m.unit)); // "years", "persons"
+// A unit after the value v, in the language's singular or plural ("1,8 personne" in French, "1.8 persons").
+const UNIT_ONE = { years: 'year', persons: 'person' };
+const unitOf = (m, v) => (m.unit === 'm' ? 'm' : t(isOne(v) ? UNIT_ONE[m.unit] : m.unit));
 function fmtValue(m, v, digits) {
   if (Number.isNaN(v)) return '–';
   if (m.kind === 'share' || m.kind === 'diverging') {
     const pc = v * 100;
     return fmtPct(v, digits ?? (pc < 1 && pc > 0 ? 1 : pc < 10 && pc % 1 ? 1 : 0));
   }
-  if (m.kind === 'value') return m.unit === 'm' ? fmtM(v) : `${fmtFixed(v, digits ?? m.decimals)} ${unitOf(m)}`;
+  if (m.kind === 'value') return m.unit === 'm' ? fmtM(v) : `${fmtFixed(v, digits ?? m.decimals)} ${unitOf(m, v)}`;
   return nf.format(v);
 }
 // A class boundary with its unit: 12.5%, 4, 1’500 m, 2.4 persons.
-const fmtBreak = (m, b) => (m.kind === 'value' ? `${m.unit === 'm' ? nf.format(b) : fmtNum(b)} ${unitOf(m)}`
+const fmtBreak = (m, b) => (m.kind === 'value' ? `${m.unit === 'm' ? nf.format(b) : fmtNum(b)} ${unitOf(m, b)}`
   : m.kind === 'count' ? nf.format(b) : fmtPct(b, 1).replace(/[.,]0(?=\D*$)/, ''));
-// "12.5–17%" rather than "12.5%–17%": the unit once, after a range.
+// "12.5–17%" rather than "12.5%–17%", "1.8–2.1 persons": the unit once, after a range.
 const fmtRange = (m, a, b) => {
-  const lo = fmtBreak(m, a), hi = fmtBreak(m, b), unit = /[\s\u202f]?%$|\s\D+$/.exec(hi)?.[0] ?? '';
-  return `${unit && lo.endsWith(unit) ? lo.slice(0, -unit.length) : lo}–${hi}`;
+  const lo = m.kind === 'value' ? (m.unit === 'm' ? nf.format(a) : fmtNum(a)) : fmtBreak(m, a).replace(/[\s\u00a0\u202f]?%$/, '');
+  return `${lo}–${fmtBreak(m, b)}`;
 };
 
 function classLabels(m, breaks, zeroClass) {
@@ -586,7 +588,7 @@ function classLabels(m, breaks, zeroClass) {
   }
   const labels = [];
   const start = zeroClass ? 1 : 0;
-  if (zeroClass) labels.push(m.kind === 'value' ? `0 ${unitOf(m)}` : fmtPct(0));
+  if (zeroClass) labels.push(m.kind === 'value' ? `0 ${unitOf(m, 0)}` : fmtPct(0));
   const bs = breaks.slice(start);
   labels.push(t('Under {v}', { v: fmtBreak(m, bs[0]) }));
   for (let k = 1; k < bs.length; k++) labels.push(fmtRange(m, bs[k - 1], bs[k]));
@@ -1421,7 +1423,7 @@ function renderLegend() {
 // The grey "no value" class, in the legend and under a saved image.
 function naLabel() {
   const { m, rate } = CLASSES;
-  return rate ? t('Under {n} residents or no value', { n: state.minPop }) : m.kind === 'count' ? '0' : t('No value');
+  return rate ? tp(state.minPop, 'Under {n} resident or no value', 'Under {n} residents or no value') : m.kind === 'count' ? '0' : t('No value');
 }
 
 function shapeSvg(shape, color) {
@@ -1682,7 +1684,7 @@ function syncControls() {
   setSeg('data-scope', state.scope);
   $('minpop-out').textContent = state.minPop;
   $('height-out').textContent = `${fmtNum(state.heightScale, 1)}×`;
-  $('height').setAttribute('aria-valuetext', t('{n} times', { n: fmtNum(state.heightScale, 1) }));
+  $('height').setAttribute('aria-valuetext', tp(state.heightScale, '{n} time', '{n} times', { n: fmtNum(state.heightScale, 1) }));
   $('height-row').hidden = state.view !== '3d' || state.smooth;
   $('exag-row').hidden = !isTerrain();
   $('exag-out').textContent = `${fmtFixed(state.exaggeration, 1)}×`;
@@ -1701,7 +1703,7 @@ function syncControls() {
     radios.forEach((r) => { r.tabIndex = r === on ? 0 : -1; });
   });
   $('sigma').setAttribute('aria-valuetext', fmtM(state.sigma));
-  $('exag').setAttribute('aria-valuetext', t('{n} times', { n: fmtFixed(state.exaggeration, 1) }));
+  $('exag').setAttribute('aria-valuetext', tp(state.exaggeration, '{n} time', '{n} times', { n: fmtFixed(state.exaggeration, 1) }));
   $('opacity').setAttribute('aria-valuetext', fmtPct(state.opacity));
   $('dim').setAttribute('aria-valuetext', fmtPct(state.dim));
 }
@@ -1757,7 +1759,7 @@ map.on('moveend', () => { clearTimeout(moveTimer); moveTimer = setTimeout(update
 // ---------------------------------------------------------------- detail panel
 const SECTIONS = [
   { title: t('Nationality'), rows: [['BB11', t('Swiss')], ['BB13', t('EU/EFTA')], ['BB14', t('Other European')], ['BB15', t('Outside Europe')], ['BB16', t('Unknown'), true]] },
-  { title: t('Place of birth'), rows: [['BB22', t('This commune')], ['BB23', t('Same canton')], ['BB24', t('Other canton')], ['BB25', t('Unknown commune'), true],
+  { title: t('Place of birth'), rows: [['BB22', t('Commune of residence')], ['BB23', t('Same canton')], ['BB24', t('Other canton')], ['BB25', t('Unknown commune'), true],
     ['BB27', t('EU/EFTA')], ['BB28', t('Other European')], ['BB29', t('Outside Europe')], ['BB30', t('Unknown country'), true]] },
   { title: t('Time in the commune'), rows: [['BB45', t('Since birth')], ['BB44', t('More than 10 years')], ['BB43', t('6–10 years')], ['BB42', t('1–5 years')],
     ['BB41', t('Less than 1 year')], ['BB46', t('Unknown'), true]] },
@@ -2241,7 +2243,7 @@ function renderDetail() {
     $('d-sub').textContent = cm ? inhabited(cells) : ''; // no density: the boundaries include lakes
   } else if (isCell) {
     $('d-title').textContent = t('Loading commune…');
-    $('d-sub').textContent = `E ${fmtCoord(cellE(i))} · N ${fmtCoord(cellN(i))} (LV95)`;
+    $('d-sub').textContent = t('E {e} · N {n} (LV95)', { e: fmtCoord(cellE(i)), n: fmtCoord(cellN(i)) });
     $('d-sub').title = t('Swiss LV95 coordinates of the hectare’s south-west corner');
     lookupCommune(cellE(i) + 50, cellN(i) + 50, $('d-title'), () => state.selected === i && state.antenna < 0 && state.scope === 'cell', t('Hectare'));
   } else {

@@ -262,7 +262,7 @@ export function scatterChart(pairs, { tip, hideTip, onHover, onClick }) {
     og.strokeStyle = css('--text-primary'); og.lineWidth = 2;
     og.beginPath(); og.arc(px[i], py[i], 5, 0, 2 * Math.PI); og.stroke();
     tip(e.clientX, e.clientY, [tp(pairs.sites[i], '{n} site', '{n} sites'),
-      t('{n} residents', { n: nf.format(Math.round(pairs.pop[i])) }), t('Click to show on the map')]);
+      tp(Math.round(pairs.pop[i]), '{n} resident', '{n} residents', { n: nf.format(Math.round(pairs.pop[i])) }), t('Click to show on the map')]);
     if (i !== current) { current = i; onHover(i); }
   });
   over.addEventListener('pointerleave', () => { og.clearRect(0, 0, W, H); current = -1; hideTip(); onHover(-1); });

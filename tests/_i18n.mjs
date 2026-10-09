@@ -78,7 +78,7 @@ export async function dataKeys() {
     ...Object.values(COLOR_MODES).flatMap((m) => m.cats),
     'SBB', 'German (border)', // short operator labels (app.js shortOp)
     'very low power', 'low power', 'medium power', 'high power', // app.js POWER_SHORT
-    'years', 'persons', // metric units
+    'years', 'persons', 'year', 'person', // metric units (app.js unitOf)
   ];
 }
 

@@ -233,16 +233,16 @@ describe('browser smoke test', { skip, timeout: 480_000 }, () => {
     };
     page.errors.length = 0;
     await page.send('Page.navigate', { url: `${base}?lang=1#map=14/46.948/7.44&m=foreign&sel=2600100,1199600&sc=radius&r=2&l=de` });
-    await check('de', [['label[for="metric"]', 'Einfärben nach'], ['#d-title', 'Umkreis 2 km'], ['[data-scope="commune"]', 'Gemeinde']]);
+    await check('de', [['label[for="metric"]', 'Einfärben nach'], ['#d-title', 'Umkreis von 2 km'], ['[data-scope="commune"]', 'Gemeinde']]);
     assert.match(await page.ev(`document.querySelector('#detail .tile .v').textContent`), /^\d{1,3}(['’]\d{3})*$/, 'de-CH digit grouping (ICU versions differ on the apostrophe)');
     // the language menu: the page reloads in French with the same view
     await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'fr'; s.dispatchEvent(new Event('change')); })()`);
-    await check('fr', [['label[for="metric"]', 'Couleur selon'], ['#d-title', 'Rayon de 2 km'], ['[data-scope="view"]', 'Vue']]);
+    await check('fr', [['label[for="metric"]', 'Colorer selon'], ['#d-title', 'Rayon de 2 km'], ['[data-scope="view"]', 'Vue']]);
     const hash = await page.ev(`location.hash`);
     for (const part of ['m=foreign', 'sel=2600100,1199600', 'sc=radius', 'l=fr']) assert.ok(hash.includes(part), `${part} in ${hash}`);
     assert.match(await page.ev(`document.querySelectorAll('#detail .tile .v')[2].textContent`), /^\d,\d\d$/, 'decimal comma');
     await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'it'; s.dispatchEvent(new Event('change')); })()`);
-    await check('it', [['label[for="metric"]', 'Colora per'], ['#d-title', 'Entro 2 km'], ['#metric option[value="foreign"]', 'Stranieri']]);
+    await check('it', [['label[for="metric"]', 'Colora secondo'], ['#d-title', 'Raggio di 2 km'], ['#metric option[value="foreign"]', 'Stranieri']]);
     await page.ev(`(() => { const s = document.getElementById('lang'); s.value = 'en'; s.dispatchEvent(new Event('change')); })()`);
     assert.ok(await page.waitFor(`!document.getElementById('loading') && document.documentElement.lang === 'en' && document.querySelector('label[for="metric"]').textContent === 'Colour by'`, 90_000), 'back to English');
     await page.ev(`history.replaceState(null, '', location.pathname); localStorage.removeItem('spg-lang')`);

@@ -39,7 +39,9 @@ export function t(key, vars) {
 }
 // Singular or plural by the language's rules (French counts 0 as singular); {n} is the formatted count.
 const plurals = new Intl.PluralRules(locale);
-export const tp = (n, one, other, vars) => t(plurals.select(n) === 'one' ? one : other, { n: fmtInt(n), ...vars });
+export const tp = (n, one, other, vars) => t(isOne(n) ? one : other, { n: fmtInt(n), ...vars });
+/** Whether n takes the singular: 1 in English, German and Italian; also 0 and 1.8 in French. */
+export const isOne = (n) => plurals.select(n) === 'one';
 
 const intFmt = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
 export const fmtInt = (v) => intFmt.format(v);
