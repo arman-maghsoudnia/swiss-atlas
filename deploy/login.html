@@ -54,14 +54,37 @@
 <body>
   <form id="f" autocomplete="on">
     <h1>Swiss atlas</h1>
-    <p>Population per hectare and mobile antenna sites. Enter the password to continue.</p>
-    <label for="pw">Password</label>
+    <p data-t="intro">Population per hectare and mobile antenna sites. Enter the password to continue.</p>
+    <label for="pw" data-t="password">Password</label>
     <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
-    <button id="go" type="submit">Open the map</button>
+    <button id="go" type="submit" data-t="open">Open the map</button>
     <div class="msg" id="msg" role="alert"></div>
   </form>
   <script>
     'use strict';
+    // The app's language (see web/i18n.js): from a link, the visitor's last choice, or the browser.
+    const TEXT = {
+      en: { title: 'Swiss atlas – sign in', intro: 'Population per hectare and mobile antenna sites. Enter the password to continue.',
+        password: 'Password', open: 'Open the map', tooMany: 'Too many attempts. Wait a minute and try again.',
+        wrong: 'Wrong password.', offline: 'Could not reach the server.' },
+      de: { title: 'Swiss atlas – Anmeldung', intro: 'Bevölkerung pro Hektare und Mobilfunk-Antennenstandorte. Geben Sie das Passwort ein, um fortzufahren.',
+        password: 'Passwort', open: 'Karte öffnen', tooMany: 'Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.',
+        wrong: 'Falsches Passwort.', offline: 'Der Server ist nicht erreichbar.' },
+      fr: { title: 'Swiss atlas – connexion', intro: 'Population par hectare et sites d’antennes de téléphonie mobile. Saisissez le mot de passe pour continuer.',
+        password: 'Mot de passe', open: 'Ouvrir la carte', tooMany: 'Trop de tentatives. Attendez une minute, puis réessayez.',
+        wrong: 'Mot de passe incorrect.', offline: 'Le serveur est injoignable.' },
+      it: { title: 'Swiss atlas – accesso', intro: 'Popolazione per ettaro e siti d’antenna di telefonia mobile. Inserisci la password per continuare.',
+        password: 'Password', open: 'Apri la carta', tooMany: 'Troppi tentativi. Attendi un minuto e riprova.',
+        wrong: 'Password errata.', offline: 'Impossibile raggiungere il server.' },
+    };
+    const known = (l) => Object.hasOwn(TEXT, l ?? '');
+    let lang = (/(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(location.hash) || [])[1];
+    if (!known(lang)) { try { lang = localStorage.getItem('spg-lang'); } catch { lang = null; } }
+    if (!known(lang)) lang = (navigator.languages || []).map((l) => l.slice(0, 2).toLowerCase()).find(known) || 'en';
+    const T = TEXT[lang];
+    document.documentElement.lang = lang;
+    document.title = T.title;
+    document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = T[e.dataset.t]; });
     // The cookie holds SHA-256("spg-v1:" + password); nginx compares it with the stored hash.
     // crypto.subtle is unavailable on plain http://, hence this small SHA-256.
     function sha256(text) {
@@ -115,9 +138,9 @@
         const res = await fetch(base + 'data/meta.json', { method: 'HEAD', cache: 'no-store', redirect: 'manual' });
         if (res.ok) { location.replace(base + location.hash); return; }
         document.cookie = cookie('', 0);
-        msg.textContent = res.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'Wrong password.';
+        msg.textContent = res.status === 429 ? T.tooMany : T.wrong;
       } catch {
-        msg.textContent = 'Could not reach the server.';
+        msg.textContent = T.offline;
       }
       go.disabled = false;
       document.getElementById('pw').select();
