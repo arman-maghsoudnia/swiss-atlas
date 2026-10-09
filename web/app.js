@@ -1481,7 +1481,7 @@ function buildControls() {
   if (A) {
     const show = $('ant-show');
     show.checked = state.ant.show;
-    show.addEventListener('change', () => { state.ant.show = show.checked; syncControls(); updateTerrainAntennas(); render(); saveSettings(); });
+    show.addEventListener('change', () => { state.ant.show = show.checked; syncControls(); updateTerrainAntennas(); render(); updateViewStats(); saveSettings(); });
     const ops = $('ant-ops');
     A.operatorLabels.forEach((label, k) => {
       const lab = el('label', 'check');
@@ -1663,7 +1663,7 @@ function updateViewStats() {
   for (const i of viewIndices()) { if (pop[i] > 0) { sum += pop[i]; ha++; } }
   $('kpi-view').textContent = nf.format(sum);
   $('kpi-ha').textContent = nf.format(ha);
-  $('kpi-ant').textContent = A ? nf.format(viewSites().length) : '–';
+  $('kpi-ant').textContent = A && state.ant.show ? nf.format(viewSites().length) : '–'; // none drawn when hidden
   if (!$('detail').hidden && state.scope === 'view') renderDetail();
 }
 let moveTimer = 0;
