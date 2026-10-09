@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Swiss Population Grid</title>
-  <meta name="description" content="Interactive hectare map of the Swiss permanent resident population (BFS STATPOP 2024) with OFCOM mobile antenna sites.">
+  <title>Swiss atlas – population and mobile antennas</title>
+  <meta name="description" content="Interactive map of Switzerland at 100 m resolution: population (FSO STATPOP 2024) and mobile antenna sites (OFCOM) on swisstopo maps.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='9' width='4' height='6' fill='%239ec5f4'/%3E%3Crect x='6' y='5' width='4' height='10' fill='%233987e5'/%3E%3Crect x='11' y='1' width='4' height='14' fill='%23184f95'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
@@ -17,8 +17,8 @@
   <aside id="panel" class="card" aria-label="Map controls">
     <header class="panel-head">
       <div>
-        <h1>Swiss population grid</h1>
-        <p class="sub" id="subtitle">Permanent residents per hectare · STATPOP</p>
+        <h1>Swiss atlas</h1>
+        <p class="sub" id="subtitle">Population per hectare</p>
       </div>
       <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" title="Collapse panel">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -27,13 +27,13 @@
 
     <div id="panel-body">
       <div class="search">
-        <input id="search" type="search" placeholder="Search a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
+        <input id="search" type="search" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
         <ul id="search-results" role="listbox" hidden></ul>
       </div>
 
       <div class="kpis">
         <div class="kpi"><span class="kpi-v" id="kpi-view">–</span><span class="kpi-l">residents in view</span></div>
-        <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l">inhabited hectares</span></div>
+        <div class="kpi"><span class="kpi-v" id="kpi-ha">–</span><span class="kpi-l">inhabited ha</span></div>
         <div class="kpi"><span class="kpi-v" id="kpi-ant">–</span><span class="kpi-l">antenna sites</span></div>
       </div>
 
@@ -44,7 +44,7 @@
           <select id="raw-col" aria-label="Attribute"></select>
           <div class="seg" role="radiogroup" aria-label="Show as">
             <button data-raw-mode="count" role="radio">Count</button>
-            <button data-raw-mode="share" role="radio">% of residents</button>
+            <button data-raw-mode="share" role="radio">Share</button>
           </div>
         </div>
         <p class="hint" id="metric-desc"></p>
@@ -54,8 +54,8 @@
 
       <section class="block" id="ant-block">
         <div class="row between">
-          <label class="check strong"><input type="checkbox" id="ant-show"> Mobile antenna sites</label>
-          <button id="open-analysis" class="link-btn" type="button">Antennas vs population ›</button>
+          <label class="check strong"><input type="checkbox" id="ant-show"> Antenna sites</label>
+          <button id="open-analysis" class="link-btn" type="button">Sites vs population ›</button>
         </div>
         <div id="ant-body">
           <div class="ops" id="ant-ops" role="group" aria-label="Operators"></div>
@@ -69,10 +69,10 @@
             </select>
             <select id="ant-type" class="compact grow" aria-label="Site type">
               <option value="">Any type</option>
-              <option value="macro">Outdoor &gt; 6 W ERP</option>
+              <option value="macro">Outdoor &gt; 6 W</option>
               <option value="small">Small cells ≤ 6 W</option>
               <option value="tunnel">Tunnel</option>
-              <option value="other">Temporary / not specified</option>
+              <option value="other">Other</option>
             </select>
           </div>
           <div class="row between">
@@ -86,19 +86,19 @@
           </div>
           <label class="check"><input type="checkbox" id="ant-size"> Size by power class</label>
           <div id="ant-legend" class="legend"></div>
-          <p class="hint">Position of each station's first mast (OFCOM). SBB sites are railway radio (GSM-R) and follow the tracks, not people, so they start unchecked.</p>
+          <p class="hint">Sites are drawn at their first mast. SBB (railway) and German border sites are off by default.</p>
         </div>
       </section>
 
       <section class="block">
         <div class="row between">
-          <label class="lbl" for="minpop">Min. residents for rates</label>
+          <label class="lbl" for="minpop">Min. residents per hectare</label>
           <output id="minpop-out" for="minpop" class="val"></output>
         </div>
         <input id="minpop" type="range" min="1" max="100" step="1">
-        <p class="hint">Hectares with 1–3 residents are published as “3”, so rates on small cells are noise. Cells below the threshold are drawn grey.</p>
+        <p class="hint">Shares and averages are greyed out below this: counts of 1–3 are published as 3.</p>
 
-        <label class="check"><input type="checkbox" id="noloc"> Remove non-geocoded residents</label>
+        <label class="check"><input type="checkbox" id="noloc"> Exclude unlocated residents</label>
         <p class="hint" id="noloc-hint"></p>
       </section>
 
@@ -107,22 +107,22 @@
           <span class="lbl">View</span>
           <div class="seg" role="radiogroup" aria-label="View">
             <button data-view="2d" role="radio" title="Flat map">Flat</button>
-            <button data-view="3d" role="radio" title="Extruded columns, height = residents">Columns</button>
+            <button data-view="3d" role="radio" title="3D columns, height = residents">Columns</button>
             <button data-view="terrain" role="radio" title="Draped over swisstopo's 3D terrain">Terrain</button>
           </div>
         </div>
         <label class="check"><input type="checkbox" id="smooth"> Smooth heatmap</label>
         <div id="sigma-row" class="row between" hidden>
-          <label class="lbl" for="sigma">Smoothing radius <output id="sigma-out" for="sigma"></output></label>
+          <label class="lbl" for="sigma">Radius <output id="sigma-out" for="sigma"></output></label>
           <input id="sigma" type="range" min="0" max="6" step="1">
         </div>
         <div id="exag-row" class="row between" hidden>
-          <label class="lbl" for="exag">Relief exaggeration <output id="exag-out" for="exag"></output></label>
+          <label class="lbl" for="exag">Relief <output id="exag-out" for="exag"></output></label>
           <input id="exag" type="range" min="1" max="3" step="0.1">
         </div>
         <p class="hint" id="terrain-note"></p>
         <div id="height-row" class="row between" hidden>
-          <label class="lbl" for="height">Height = residents × <output id="height-out" for="height"></output> m</label>
+          <label class="lbl" for="height"><output id="height-out" for="height"></output> m per resident</label>
           <input id="height" type="range" min="0.5" max="20" step="0.5">
         </div>
         <div class="row between">
@@ -136,22 +136,21 @@
         <div class="row between">
           <label class="lbl" for="basemap">Basemap</label>
           <select id="basemap" class="compact">
-            <option value="imagery">SWISSIMAGE + labels</option>
-            <option value="swissimage">SWISSIMAGE</option>
-            <option value="national">National map (colour)</option>
+            <option value="imagery">Aerial + labels</option>
+            <option value="swissimage">Aerial</option>
+            <option value="national">National map</option>
             <option value="nationalGrey">National map (grey)</option>
-            <option value="light">Light base map</option>
-            <option value="base">Base map</option>
+            <option value="light">Light map</option>
+            <option value="base">Standard map</option>
             <option value="none">None</option>
           </select>
         </div>
       </section>
 
       <footer class="src">
-        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT</a>;
-        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">OFCOM</a> (provided by the operators, no guarantee of accuracy).
-        Reference date 31.12.2024. Values 1–3 are published as 3 (data protection), so sums of hectares slightly exceed official totals.
-        Click a hectare for details.
+        Data: <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" target="_blank" rel="noopener">STATPOP2024, FSO GEOSTAT</a> (31 Dec 2024);
+        antenna sites <a href="https://www.geocat.ch/geonetwork/srv/ger/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" target="_blank" rel="noopener">Federal Office of Communications OFCOM</a>, as supplied by the operators, accuracy not guaranteed.
+        Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.
         <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener">Source code</a> (AGPL-3.0).
       </footer>
     </div>
@@ -169,9 +168,9 @@
     </header>
     <div class="scope row">
       <div class="seg" role="radiogroup" aria-label="Summarise">
-        <button data-scope="cell" role="radio">This hectare</button>
+        <button data-scope="cell" role="radio">Hectare</button>
         <button data-scope="radius" role="radio">Radius</button>
-        <button data-scope="view" role="radio">Map view</button>
+        <button data-scope="view" role="radio">In view</button>
       </div>
       <select id="radius" class="compact" aria-label="Radius">
         <option value="0.5">500 m</option>
@@ -185,10 +184,10 @@
     <div id="d-body"></div>
   </aside>
 
-  <aside id="analysis" class="card" aria-label="Antennas vs population" hidden>
+  <aside id="analysis" class="card" aria-label="Antenna sites vs population" hidden>
     <header class="panel-head">
       <div>
-        <h2>Antennas vs population</h2>
+        <h2>Antenna sites vs population</h2>
         <p class="sub" id="a-sub"></p>
       </div>
       <button id="a-close" class="icon-btn" title="Close (Esc)" aria-label="Close analysis">
@@ -201,7 +200,7 @@
   <div id="tooltip" role="status" hidden></div>
 
   <div id="loading" class="card">
-    <p id="loading-msg">Loading hectare data…</p>
+    <p id="loading-msg">Loading population data…</p>
     <div class="bar"><div id="loading-bar"></div></div>
   </div>
 

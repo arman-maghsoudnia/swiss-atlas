@@ -7,16 +7,16 @@ export const TECH_LABEL = (mask) => ['2G', '3G', '4G', '5G'].filter((g) => mask 
 
 // Type groups used for filtering / colouring (indices into data.types).
 export const TYPE_GROUPS = {
-  macro: { label: 'Outdoor > 6 W ERP', types: [0] },
-  small: { label: 'Small cells ≤ 6 W ERP', types: [1, 2] },
+  macro: { label: 'Outdoor > 6 W', types: [0] },
+  small: { label: 'Small cells ≤ 6 W', types: [1, 2] },
   tunnel: { label: 'Tunnel', types: [3] },
-  other: { label: 'Temporary / not specified', types: [4, 5] },
+  other: { label: 'Other', types: [4, 5] },
 };
 
 // Colour-by modes: each maps a site to a category 0..3 (3 = neutral "other").
 // Categories 0–2 use the validated trio; 3 is grey. Shapes repeat the category as a second cue.
 export const COLOR_MODES = {
-  single: { label: 'One colour', cats: ['Antenna site'], of: () => 0 },
+  single: { label: 'One colour', cats: ['All sites'], of: () => 0 },
   operator: { label: 'Operator', cats: ['Swisscom', 'Salt', 'Sunrise', 'SBB & other'], of: (A, i) => Math.min(A.op[i], 3) },
   tech: { label: 'Technology', cats: ['5G', '4G (no 5G)', '2G/3G only'], of: (A, i) => (A.tech[i] & 8 ? 0 : A.tech[i] & 4 ? 1 : 2) },
   type: {
@@ -36,7 +36,10 @@ export async function loadAntennas(url) {
   const j = await res.json();
   const n = j.count;
   const A = {
-    n, operators: j.operators, operatorLabels: j.operatorLabels, types: j.types, powers: j.powers,
+    n, operators: j.operators, operatorLabels: j.operatorLabels,
+    // Display forms: "Outdoor > 6 W" (ERP is jargon), "Medium (≤ 5 kW)" rather than "medium (≤ 5,000 W)".
+    types: j.types.map((t) => t.replace(/ ERP$/, '')),
+    powers: j.powers.map((p) => (p[0].toUpperCase() + p.slice(1)).replace(/(\d+),000 W/, '$1 kW')),
     e: Int32Array.from(j.e), N: Int32Array.from(j.n), op: Uint8Array.from(j.op), type: Uint8Array.from(j.type),
     power: Uint8Array.from(j.power), tech: Uint8Array.from(j.tech), adaptive: Uint8Array.from(j.adaptive),
     exempt: Uint8Array.from(j.exempt), date: j.date, limit: j.limit, name: j.name,

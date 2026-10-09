@@ -15,6 +15,7 @@ const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 const fmtCoord = (v) => nf.format(Math.round(v));
 const fmtM = (m) => (!Number.isFinite(m) ? '–' : m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m)} m`);
 const fmtKm = (km) => (km < 1 ? `${km * 1000} m` : `${km} km`);
+const fmtDate = (iso) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // ---------------------------------------------------------------- palettes
 // Sequential blue (one hue, light -> dark; flipped anchor on dark basemaps) and a blue <-> red
@@ -282,9 +283,9 @@ const count = (code) => ({ type: 'count', code });
 const ratio = (num, den) => ({ type: 'ratio', num, den });
 const METRICS = [
   { id: 'pop', group: 'Population', label: 'Residents per hectare', kind: 'count', breaks: [4, 10, 25, 50, 100, 250],
-    desc: 'Permanent resident population on each 100 × 100 m cell.', src: count('BBTOT') },
+    desc: 'Permanent residents on each hectare (100 × 100 m).', src: count('BBTOT') },
   { id: 'hh', group: 'Population', label: 'Private households per hectare', kind: 'count', breaks: [4, 10, 20, 40, 80, 150],
-    desc: 'Number of private households on each cell.', src: count('HPTOT') },
+    desc: 'Private households on each hectare.', src: count('HPTOT') },
   { id: 'foreign', group: 'Nationality', label: 'Foreign nationals', kind: 'share',
     desc: 'Share of residents without Swiss citizenship (dual nationals count as Swiss).', src: ratio(['BB12'], ['BB11', 'BB12']) },
   { id: 'euefta', group: 'Nationality', label: 'EU/EFTA nationals', kind: 'share',
@@ -293,34 +294,34 @@ const METRICS = [
     desc: 'Share of residents with the nationality of a country outside Europe.', src: ratio(['BB15'], ['BB11', 'BB12']) },
   { id: 'abroad', group: 'Place of birth', label: 'Born abroad', kind: 'share',
     desc: 'Share of residents born outside Switzerland.', src: ratio(['BB26'], ['BB21', 'BB26']) },
-  { id: 'native', group: 'Place of birth', label: 'Born in their commune of residence', kind: 'share',
+  { id: 'native', group: 'Place of birth', label: 'Born in their current commune', kind: 'share',
     desc: 'Share of residents born in the commune they live in today.', src: ratio(['BB22'], ['BB21', 'BB26']) },
-  { id: 'meanAge', group: 'Age & sex', label: 'Mean age', kind: 'value', unit: 'years', step: 1, decimals: 1,
-    desc: 'Approximate mean age from 5-year age bands (band midpoints; 90+ counted as 92.5).',
+  { id: 'meanAge', group: 'Age and sex', label: 'Average age', kind: 'value', unit: 'years', step: 1, decimals: 1,
+    desc: 'Estimated from 5-year age bands (midpoints; 90+ counted as 92.5).',
     src: { type: 'mean', codes: ALL_AGES, weights: meanAgeWeights } },
-  { id: 'young', group: 'Age & sex', label: 'Aged 0–19', kind: 'share', desc: 'Share of children and teenagers.', src: ratio(age(1, 4), ALL_AGES) },
-  { id: 'working', group: 'Age & sex', label: 'Aged 20–64', kind: 'share', desc: 'Share of working-age residents.', src: ratio(age(5, 13), ALL_AGES) },
-  { id: 'senior', group: 'Age & sex', label: 'Aged 65+', kind: 'share', desc: 'Share of residents aged 65 and over.', src: ratio(age(14, 19), ALL_AGES) },
-  { id: 'old', group: 'Age & sex', label: 'Aged 80+', kind: 'share', desc: 'Share of residents aged 80 and over.', src: ratio(age(17, 19), ALL_AGES) },
-  { id: 'women', group: 'Age & sex', label: 'Women', kind: 'diverging', breaks: [0.40, 0.45, 0.48, 0.52, 0.55, 0.60],
-    desc: 'Share of women. Grey = balanced (48–52 %); blue = more men, red = more women.', src: ratio(['BBWTOT'], ['BBMTOT', 'BBWTOT']) },
-  { id: 'newcomers', group: 'Mobility', label: 'In the commune for less than a year', kind: 'share',
+  { id: 'young', group: 'Age and sex', label: 'Aged 0–19', kind: 'share', desc: 'Share of residents under 20.', src: ratio(age(1, 4), ALL_AGES) },
+  { id: 'working', group: 'Age and sex', label: 'Aged 20–64', kind: 'share', desc: 'Share of working-age residents.', src: ratio(age(5, 13), ALL_AGES) },
+  { id: 'senior', group: 'Age and sex', label: 'Aged 65+', kind: 'share', desc: 'Share of residents aged 65 and over.', src: ratio(age(14, 19), ALL_AGES) },
+  { id: 'old', group: 'Age and sex', label: 'Aged 80+', kind: 'share', desc: 'Share of residents aged 80 and over.', src: ratio(age(17, 19), ALL_AGES) },
+  { id: 'women', group: 'Age and sex', label: 'Women', kind: 'diverging', breaks: [0.40, 0.45, 0.48, 0.52, 0.55, 0.60],
+    desc: 'Share of women. Grey: balanced (48–52%); blue: more men; red: more women.', src: ratio(['BBWTOT'], ['BBMTOT', 'BBWTOT']) },
+  { id: 'newcomers', group: 'Mobility', label: 'Newcomers (under 1 year)', kind: 'share',
     desc: 'Share of residents who have lived in their commune for under one year.', src: ratio(['BB41'], DURATION) },
-  { id: 'longterm', group: 'Mobility', label: 'In the commune for 10+ years or since birth', kind: 'share',
-    desc: 'Share of long-standing residents.', src: ratio(['BB44', 'BB45'], DURATION) },
+  { id: 'longterm', group: 'Mobility', label: 'Long-standing residents', kind: 'share',
+    desc: 'Share of residents who have lived in their commune for more than 10 years or since birth.', src: ratio(['BB44', 'BB45'], DURATION) },
   { id: 'fromAbroad', group: 'Mobility', label: 'Lived abroad a year ago', kind: 'share',
-    desc: 'Share of residents whose place of residence one year earlier was abroad.', src: ratio(['BB54'], PREV) },
+    desc: 'Share of residents who lived abroad one year earlier.', src: ratio(['BB54'], PREV) },
   { id: 'fromCanton', group: 'Mobility', label: 'Lived in another canton a year ago', kind: 'share',
-    desc: 'Share of residents who moved in from another canton during the past year.', src: ratio(['BB53'], PREV) },
+    desc: 'Share of residents who lived in another canton one year earlier.', src: ratio(['BB53'], PREV) },
   { id: 'hhSize', group: 'Households', label: 'Average household size', kind: 'value', unit: 'persons', step: 0.1, decimals: 2,
     desc: 'Persons per private household (households of 6+ counted as 6, so a slight underestimate).',
     src: { type: 'mean', codes: HH, weights: [1, 2, 3, 4, 5, 6] } },
   { id: 'single', group: 'Households', label: 'Single-person households', kind: 'share',
     desc: 'Share of private households with one person.', src: ratio(['HP01'], HH) },
-  { id: 'dist', group: 'Antennas', label: 'Distance to the nearest antenna site', kind: 'value', unit: 'm', step: 50, decimals: 0, noMinPop: true,
-    desc: 'Straight-line distance from the hectare centre to the nearest antenna site passing the antenna filters. Zoomed out: population-weighted mean.',
+  { id: 'dist', group: 'Antennas', label: 'Distance to nearest antenna site', kind: 'value', unit: 'm', step: 50, decimals: 0, noMinPop: true,
+    desc: 'Straight-line distance to the nearest site passing the antenna filters (blocks: average per resident).',
     src: { type: 'dist' } },
-  { id: 'raw', group: 'All attributes', label: 'Any published attribute…', kind: 'raw', desc: 'Pick any of the 77 published STATPOP attributes.' },
+  { id: 'raw', group: 'All attributes', label: 'Any of the 77 attributes…', kind: 'raw' },
 ];
 const METRIC = Object.fromEntries(METRICS.map((m) => [m.id, m]));
 
@@ -329,13 +330,13 @@ function activeMetric() {
   const m = METRIC[state.metric] || METRIC.pop;
   if (m.kind !== 'raw') return m;
   const c = state.rawCol, label = META.labels[c];
-  if (c === 'HPI') return { id: 'raw:HPI', label, kind: 'class', desc: label, src: count('HPI') };
+  if (c === 'HPI') return { id: 'raw:HPI', label, kind: 'class', desc: `${label} (FSO code HPI).`, src: count('HPI') };
   if (state.rawMode === 'count' || c === 'BBTOT' || c === 'HPTOT') { // a total as a share of itself is always 100 %
-    return { id: `raw:${c}:count`, label: `${label} per hectare`, kind: 'count', desc: `${c} · ${label}`, src: count(c) };
+    return { id: `raw:${c}:count`, label: `${label} per hectare`, kind: 'count', desc: `${label} per hectare (FSO code ${c}).`, src: count(c) };
   }
   const den = c.startsWith('HP') ? 'HPTOT' : 'BBTOT';
   return { id: `raw:${c}:share`, label: `${label} (${den === 'HPTOT' ? '% of households' : '% of residents'})`, kind: 'share',
-    desc: `${c} ÷ ${den}`, src: ratio([c], [den]) };
+    desc: `${label} as a share of all ${den === 'HPTOT' ? 'private households' : 'residents'} (FSO code ${c}).`, src: ratio([c], [den]) };
 }
 
 // ---------------------------------------------------------------- classification
@@ -396,7 +397,7 @@ function fmtValue(m, v, digits) {
   if (m.kind === 'share' || m.kind === 'diverging') {
     const pc = v * 100;
     const d = digits ?? (pc < 1 && pc > 0 ? 1 : pc < 10 && pc % 1 ? 1 : 0);
-    return `${pc.toFixed(d)} %`;
+    return `${pc.toFixed(d)}%`;
   }
   if (m.kind === 'value') return m.unit === 'm' ? fmtM(v) : `${v.toFixed(digits ?? m.decimals)} ${m.unit}`;
   return nf.format(v);
@@ -406,17 +407,17 @@ const fmtBreak = (m, b) => (m.kind === 'value' ? (m.unit === 'm' ? nf.format(b) 
 
 function classLabels(m, breaks, zeroClass) {
   if (!breaks.length) return []; // nothing to classify: every hectare is shown as "no value"
-  const unit = m.kind === 'share' || m.kind === 'diverging' ? ' %' : m.kind === 'value' ? ` ${m.unit}` : '';
+  const unit = m.kind === 'share' || m.kind === 'diverging' ? '%' : m.kind === 'value' ? ` ${m.unit}` : '';
   if (m.kind === 'class') return ['1 · all plausible', '2 · at least one implausible'];
   if (m.kind === 'count') {
-    return [...breaks, Infinity].map((b, k) => (k === 0 ? `under ${nf.format(b)}`
+    return [...breaks, Infinity].map((b, k) => (k === 0 ? `Under ${nf.format(b)}`
       : b === Infinity ? `${nf.format(breaks[k - 1])} or more` : `${nf.format(breaks[k - 1])}–${nf.format(b)}`));
   }
   const labels = [];
   const start = zeroClass ? 1 : 0;
   if (zeroClass) labels.push(`0${unit}`);
   const bs = breaks.slice(start);
-  labels.push(`${zeroClass ? 'above 0, ' : ''}under ${fmtBreak(m, bs[0])}${unit}`);
+  labels.push(`Under ${fmtBreak(m, bs[0])}${unit}`);
   for (let k = 1; k < bs.length; k++) labels.push(`${fmtBreak(m, bs[k - 1])}–${fmtBreak(m, bs[k])}${unit}`);
   labels.push(`${fmtBreak(m, bs[bs.length - 1])}${unit} or more`);
   return labels;
@@ -508,13 +509,14 @@ function paint() {
   };
   const res = $('res-note');
   if (isTerrain() && !state.smooth) {
-    res.textContent = 'Terrain view: hectares are draped over swisstopo\'s relief; distant or zoomed-out areas use 200 m – 2 km blocks (rates over each block, counts as the mean per inhabited hectare).';
+    res.textContent = 'Distant areas use coarser blocks (up to 2 km); counts are averaged per inhabited hectare.';
   } else if (state.smooth) {
-    res.textContent = `Smooth heatmap: Gaussian kernel with σ = ${fmtM(state.sigma)}. Rates are kernel-weighted (smoothed numerator ÷ smoothed denominator); counts are the mean per inhabited hectare. Colours blend between the classes and fade where few hectares are inhabited.`;
+    res.textContent = 'Counts are averaged per inhabited hectare; the surface fades where few hectares are inhabited.';
     computeSmooth();
   } else {
-    res.textContent = g.s === 100 ? 'Showing 100 m hectares.'
-      : `Zoomed out: showing ${g.s >= 1000 ? `${g.s / 1000} km` : `${g.s} m`} blocks. Rates are computed over each block; counts are the mean per inhabited hectare. Zoom in for 100 m hectares.`;
+    res.textContent = g.s === 100 ? 'Showing 100 m hectares. Click one for details.'
+      : CLASSES.m.kind === 'class' ? 'This attribute is shown at 100 m only. Zoom in.'
+        : `Showing ${blockLabel(g.s)} blocks; counts are averaged per inhabited hectare. Zoom in for hectares.`;
   }
   refreshPopTiles();
   render();
@@ -777,7 +779,8 @@ const fmtCount = (v, cell) => (cell && v === 3 ? '1–3' : nf.format(Math.round(
 const blockLabel = (s) => (s >= 1000 ? `${s / 1000} km` : `${s} m`);
 
 function antennaSummary(i) {
-  return [A.name[i], `${A.operatorLabels[A.op[i]]} · ${A.types[A.type[i]]}`, `${ANT.TECH_LABEL(A.tech[i])} · power ${A.powers[A.power[i]]}`];
+  return [A.name[i], `${A.operatorLabels[A.op[i]]} · ${A.types[A.type[i]]}`,
+    `${ANT.TECH_LABEL(A.tech[i])} · ${A.powers[A.power[i]].split(' (')[0].toLowerCase()} power`];
 }
 
 // Tooltip for block/hectare i of grid g (shared by the flat deck.gl view and the terrain view).
@@ -791,16 +794,17 @@ function cellTip(g, i, x, y) {
   showTip(x, y, (t) => {
     const hidden = rate && pop < state.minPop;
     if (m.kind === 'count') {
-      t.append(el('div', 'tv', isHa ? `${fmtCount(v, true)}` : `${v.toFixed(v < 10 ? 1 : 0)} per inhabited ha`));
-      t.append(el('div', 'tl', m.label.replace(/ per hectare$/, '')));
+      const what = m.label.replace(/ per hectare$/, '');
+      t.append(el('div', 'tv', isHa ? fmtCount(v, true) : v.toFixed(v < 10 ? 1 : 0)));
+      t.append(el('div', 'tl', isHa ? what : `${what} (average per inhabited hectare)`));
     } else {
-      t.append(el('div', 'tv', hidden ? 'Rate hidden' : fmtValue(m, v)));
+      t.append(el('div', 'tv', hidden ? 'Too few residents' : fmtValue(m, v)));
       t.append(el('div', 'tl', m.label));
     }
     if (m.id !== 'pop' || !isHa) {
-      t.append(el('div', 'tl', `${fmtCount(pop, isHa)} residents${block}${hidden ? ` (under ${state.minPop})` : ''}`));
+      t.append(el('div', 'tl', `${fmtCount(pop, isHa)} residents${block}${hidden ? ` (min. ${state.minPop})` : ''}`));
     }
-    if (isHa && NOLOC_OF.has(i)) t.append(el('div', 'tl', 'Commune-centre hectare'));
+    if (isHa && NOLOC_OF.has(i)) t.append(el('div', 'tl', 'Commune centre (incl. unlocated residents)'));
     if (!isHa && !isTerrain()) t.append(el('div', 'tl', 'Click to zoom in'));
   });
 }
@@ -811,8 +815,9 @@ function smoothTip(E, Nn, x, y) {
   if (p < 0 || SMOOTH.alpha(p) < 0.05 || Number.isNaN(SMOOTH.value(p))) return false;
   const v = SMOOTH.value(p);
   tipLines(x, y, [
-    m.kind === 'count' ? `${v.toFixed(v < 10 ? 1 : 0)} per inhabited ha` : fmtValue(m, v),
-    m.label.replace(/ per hectare$/, ''), `smoothed, σ = ${fmtM(state.sigma)}`]);
+    m.kind === 'count' ? v.toFixed(v < 10 ? 1 : 0) : fmtValue(m, v),
+    m.kind === 'count' ? `${m.label.replace(/ per hectare$/, '')} (average per inhabited hectare)` : m.label,
+    `Smoothed over ${fmtM(state.sigma)}`]);
   return true;
 }
 // Grid block under an LV95 point for grid size s (the hectare index when s = 100), or -1.
@@ -998,7 +1003,7 @@ async function installTerrain() {
     map.addLayer({ id: 'spg-ant-sel', type: 'circle', source: 'spg-over', filter: ['==', ['get', 'kind'], 'antenna'],
       paint: { 'circle-radius': 10, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-width': 2.5, 'circle-stroke-color': dark ? '#ffffff' : '#0b0b0b' } }, before);
   }
-  note.textContent = 'Right-drag (or Ctrl + drag) to tilt and turn. Relief: swissALTI3D via swisstopo.';
+  note.textContent = 'Right-drag or Ctrl + drag to tilt and rotate; two fingers on touch screens.';
   renderTerrainOverlays();
 }
 
@@ -1133,11 +1138,11 @@ function renderLegend() {
     const b = el('div', 'legend-row static');
     const sw = el('span', 'sw');
     sw.style.background = NA_COLOR[basemapDark() ? 'dark' : 'light'];
-    b.append(sw, el('span', 'rng', rate ? `Fewer than ${state.minPop} residents` : m.kind === 'count' ? 'None' : 'No value'), el('span', 'cnt', `${nf.format(naCount)} ha`));
+    b.append(sw, el('span', 'rng', rate ? `Under ${state.minPop} residents or no value` : m.kind === 'count' ? '0' : 'No value'), el('span', 'cnt', `${nf.format(naCount)} ha`));
     box.append(b);
   }
   const note = el('div', 'legend-note', state.smooth ? 'Hectare counts per class, before smoothing.'
-    : m.breaks || m.kind === 'class' ? 'Click a class to isolate it.' : 'Classes are rounded quantiles of the hectares shown. Click a class to isolate it.');
+    : m.breaks || m.kind === 'class' ? 'Click a class to show only it.' : 'Each class holds a similar number of hectares. Click one to show only it.');
   box.append(note);
   $('metric-desc').textContent = m.desc || '';
 }
@@ -1169,7 +1174,7 @@ function renderAntLegend() {
   mode.cats.forEach((label, k) => {
     if (state.ant.color !== 'single' && !counts[k]) return;
     const row = el('div', 'legend-row static');
-    row.append(shapeSvg(ANT.SHAPES[k], pal[k]), el('span', 'rng', state.ant.color === 'single' ? 'Antenna site' : label),
+    row.append(shapeSvg(ANT.SHAPES[k], pal[k]), el('span', 'rng', state.ant.color === 'single' ? 'All sites' : label),
       el('span', 'cnt', `${nf.format(counts[k])} sites`));
     box.append(row);
   });
@@ -1225,7 +1230,7 @@ function buildControls() {
   for (const [label, codes] of groups) {
     const g = document.createElement('optgroup');
     g.label = label;
-    for (const c of codes) { const o = el('option', null, `${META.labels[c]} · ${c}`); o.value = c; g.append(o); }
+    for (const c of codes) { const o = el('option', null, META.labels[c]); o.value = c; o.title = `FSO code ${c}`; g.append(o); }
     raw.append(g);
   }
   raw.value = state.rawCol;
@@ -1254,7 +1259,7 @@ function buildControls() {
     renderAnalysis();
   });
   $('noloc-hint').textContent =
-    `${nf.format(META.noloc.residents)} residents with no geocoded address are placed on ${nf.format(M)} commune-centre hectares, which creates artificial peaks.`;
+    `${nf.format(META.noloc.residents)} residents with no exact location are placed at commune centres, creating false peaks.`;
 
   // antennas
   $('ant-block').hidden = !A;
@@ -1422,13 +1427,13 @@ map.on('moveend', () => { clearTimeout(moveTimer); moveTimer = setTimeout(update
 // ---------------------------------------------------------------- detail panel
 const SECTIONS = [
   { title: 'Nationality', rows: [['BB11', 'Swiss'], ['BB13', 'EU/EFTA'], ['BB14', 'Other European'], ['BB15', 'Outside Europe'], ['BB16', 'Unknown', true]] },
-  { title: 'Place of birth', rows: [['BB22', 'This commune'], ['BB23', 'Same canton'], ['BB24', 'Other canton'], ['BB25', 'Switzerland, unknown', true],
-    ['BB27', 'EU/EFTA'], ['BB28', 'Other European'], ['BB29', 'Outside Europe'], ['BB30', 'Abroad, unknown', true]] },
-  { title: 'Time lived in the commune', rows: [['BB45', 'Since birth'], ['BB44', 'More than 10 years'], ['BB43', '6–10 years'], ['BB42', '1–5 years'],
+  { title: 'Place of birth', rows: [['BB22', 'This commune'], ['BB23', 'Same canton'], ['BB24', 'Other canton'], ['BB25', 'Unknown commune', true],
+    ['BB27', 'EU/EFTA'], ['BB28', 'Other European'], ['BB29', 'Outside Europe'], ['BB30', 'Unknown country', true]] },
+  { title: 'Time in the commune', rows: [['BB45', 'Since birth'], ['BB44', 'More than 10 years'], ['BB43', '6–10 years'], ['BB42', '1–5 years'],
     ['BB41', 'Less than 1 year'], ['BB46', 'Unknown', true]] },
-  { title: 'Place of residence a year ago', rows: [['BB51', 'Same commune'], ['BB52', 'Same canton'], ['BB53', 'Other canton'], ['BB54', 'Abroad'],
+  { title: 'Residence a year ago', rows: [['BB51', 'Same commune'], ['BB52', 'Same canton'], ['BB53', 'Other canton'], ['BB54', 'Abroad'],
     ['BB55', 'Not yet born'], ['BB56', 'Unknown', true]] },
-  { title: 'Private households by size', rows: HH.map((c, k) => [c, k === 5 ? '6+ persons' : `${k + 1} person${k ? 's' : ''}`]) },
+  { title: 'Household size', rows: HH.map((c, k) => [c, k === 5 ? '6+ persons' : `${k + 1} person${k ? 's' : ''}`]) },
 ];
 
 function scopeIndices() {
@@ -1499,7 +1504,7 @@ function closeDetail() {
 
 let lookupCtl = null;
 const communeCache = new Map();
-async function lookupCommune(E, Nn, target, stillValid) {
+async function lookupCommune(E, Nn, target, stillValid, fallback = '') {
   const key = `${Math.floor(E / 100)}:${Math.floor(Nn / 100)}`;
   const show = (txt) => { if (stillValid()) target.textContent = txt; };
   if (communeCache.has(key)) { show(communeCache.get(key)); return; }
@@ -1515,11 +1520,11 @@ async function lookupCommune(E, Nn, target, stillValid) {
     const json = await res.json();
     const hit = (json.results || []).find((r) => r.attributes?.is_current_jahr) || json.results?.[0];
     const a = hit?.attributes;
-    const name = a ? (a.gemname.includes(`(${a.kanton})`) ? a.gemname : `${a.gemname} (${a.kanton})`) : 'Outside Switzerland';
+    const name = a ? (a.gemname.includes(`(${a.kanton})`) ? a.gemname : `${a.gemname} (${a.kanton})`) : 'Commune unknown';
     communeCache.set(key, name);
     show(name);
   } catch (e) {
-    if (e.name !== 'AbortError') show('');
+    if (e.name !== 'AbortError') show(fallback);
   }
 }
 
@@ -1527,6 +1532,7 @@ function renderDetail() {
   if ($('detail').hidden) return;
   const body = $('d-body');
   body.replaceChildren();
+  $('d-sub').title = '';
   const scope = state.scope;
   const isCell = scope === 'cell';
   const idx = scopeIndices();
@@ -1541,19 +1547,20 @@ function renderDetail() {
     $('d-sub').append(commune);
     lookupCommune(A.e[ai], A.N[ai], commune, () => state.antenna === ai);
     body.append(antennaProps(ai));
-    const h = el('h3', 'scope-h', scope === 'view' ? 'Current map view' : isCell ? 'Hectare of this site' : `Within ${fmtKm(state.radiusKm)} of this site`);
+    const h = el('h3', 'scope-h', scope === 'view' ? 'Current map view' : isCell ? 'This site\'s hectare' : `Within ${fmtKm(state.radiusKm)} of this site`);
     body.append(h);
   } else if (scope === 'view') {
     $('d-title').textContent = 'Current map view';
     $('d-sub').textContent = `${nf.format(cells)} inhabited hectares`;
   } else if (isCell) {
     $('d-title').textContent = 'Loading commune…';
-    $('d-sub').textContent = `Hectare E ${fmtCoord(cellE(i))} · N ${fmtCoord(cellN(i))} (LV95, SW corner)`;
-    lookupCommune(cellE(i) + 50, cellN(i) + 50, $('d-title'), () => state.selected === i && state.antenna < 0 && state.scope === 'cell');
+    $('d-sub').textContent = `E ${fmtCoord(cellE(i))} · N ${fmtCoord(cellN(i))} (LV95)`;
+    $('d-sub').title = 'Swiss LV95 coordinates of the hectare\'s south-west corner';
+    lookupCommune(cellE(i) + 50, cellN(i) + 50, $('d-title'), () => state.selected === i && state.antenna < 0 && state.scope === 'cell', 'Hectare');
   } else {
     const areaKm2 = Math.PI * state.radiusKm ** 2;
     $('d-title').textContent = `Within ${fmtKm(state.radiusKm)}`;
-    $('d-sub').textContent = `of E ${fmtCoord(c[0])} · N ${fmtCoord(c[1])} · ${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / areaKm2))} residents/km²`;
+    $('d-sub').textContent = `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / areaKm2))} residents/km²`;
   }
   if (ai >= 0 && scope === 'radius') {
     body.append(el('p', 'note', `${nf.format(cells)} inhabited hectares · ${nf.format(Math.round(sums.BBTOT / (Math.PI * state.radiusKm ** 2)))} residents/km²`));
@@ -1562,7 +1569,7 @@ function renderDetail() {
   const residents = sums.BBTOT;
   if (A) body.append(antennaSection(sums, isCell));
   if (!residents) {
-    body.append(el('p', 'note', isCell || scope === 'view' ? 'No geocoded residents here.' : 'No geocoded residents in this area.'));
+    body.append(el('p', 'note', isCell || scope === 'view' ? 'No residents here.' : 'No residents in this area.'));
     return;
   }
   const agesSum = ALL_AGES.reduce((s, k) => s + sums[k], 0);
@@ -1575,20 +1582,20 @@ function renderDetail() {
   const tiles = el('div', 'tiles');
   const tile = (v, l) => { const t = el('div', 'tile'); t.append(el('span', 'v', v), el('span', 'l', l)); tiles.append(t); };
   tile(fmtCount(residents, isCell), 'residents');
-  tile(fmtCount(sums.HPTOT, isCell), 'private households');
-  tile(Number.isFinite(hhSize) ? hhSize.toFixed(2) : '–', 'persons / household');
+  tile(fmtCount(sums.HPTOT, isCell), 'households');
+  tile(Number.isFinite(hhSize) ? hhSize.toFixed(2) : '–', 'household size');
   tile(fmtValue(shareM, share(sums.BB12, sums.BB11 + sums.BB12), 0), 'foreign nationals');
-  tile(Number.isFinite(meanAge) ? meanAge.toFixed(1) : '–', 'mean age (approx.)');
+  tile(Number.isFinite(meanAge) ? meanAge.toFixed(1) : '–', 'average age');
   tile(fmtValue(shareM, share(age(14, 19).reduce((s, k) => s + sums[k], 0), agesSum), 0), 'aged 65+');
   body.insertBefore(tiles, body.querySelector('.ant-sec'));
 
   if (isCell && NOLOC_OF.has(i)) {
     const j = NOLOC_OF.get(i);
     body.append(el('div', 'badge',
-      `Commune-centre hectare: ${nf.format(NOLOC.BBTOT[j])} of the published residents have no geocoded address and were placed here by the FSO${state.excludeNoloc ? ' (removed from the figures above)' : ''}.`));
+      `Commune centre: the FSO placed ${nf.format(NOLOC.BBTOT[j])} residents with no exact location on this hectare.${state.excludeNoloc ? ' They are excluded above.' : ''}`));
   }
   if (isCell && residents < 20) {
-    body.append(el('p', 'note', 'Small cell: every value from 1 to 3 is published as 3, so shares here are rough.'));
+    body.append(el('p', 'note', 'Few residents: counts of 1–3 are published as 3, so shares here are rough.'));
   }
 
   body.append(pyramid(sums, isCell));
@@ -1604,7 +1611,7 @@ function renderDetail() {
     body.append(links);
   }
   if (!isCell) {
-    body.append(el('p', 'note', 'Sums of published hectare values. Because 1–3 is published as 3, totals slightly overstate the true population.'));
+    body.append(el('p', 'note', 'Sums of hectare values. Counts of 1–3 are published as 3, so totals run slightly high.'));
   }
 }
 
@@ -1614,11 +1621,11 @@ function antennaProps(i) {
   row('Type', A.types[A.type[i]]);
   row('Technology', ANT.TECH_LABEL(A.tech[i]));
   row('Power class', A.powers[A.power[i]]);
-  row('Adaptive antennas', A.adaptive[i] ? 'Partially adaptive operation' : 'No');
-  row('Permit', A.exempt[i] ? 'Exempt from NISV precautionary limits (low power, location or short operation)'
-    : A.date[i] ? `Site data sheet ${A.date[i]}` : '–');
+  row('Adaptive antennas', A.adaptive[i] ? 'Partly adaptive' : 'No');
+  row('Permit', A.exempt[i] ? 'Exempt from precautionary limits (low power, location or short-term use)'
+    : A.date[i] ? `Site data sheet, ${fmtDate(A.date[i])}` : '–');
   row('Installation limit', A.limit[i] != null ? `${A.limit[i]} V/m` : '–');
-  row('LV95', `E ${fmtCoord(A.e[i])} · N ${fmtCoord(A.N[i])}`);
+  row('Coordinates (LV95)', `E ${fmtCoord(A.e[i])} · N ${fmtCoord(A.N[i])}`);
   const pop = col('BBTOT');
   const within = (r) => {
     let s = 0;
@@ -1798,17 +1805,17 @@ function renderAnalysis() {
   const tiles = el('div', 'tiles');
   const tile = (v, l) => { const t = el('div', 'tile'); t.append(el('span', 'v', v), el('span', 'l', l)); tiles.append(t); };
   tile(nf.format(Math.round(R.total / SITES.length)), 'residents per site');
-  tile(fmtM(R.curve.quantile(0.5)), 'median distance, resident → site');
-  tile(`${Math.round(R.curve.shareWithin(500) * 100)} %`, 'residents within 500 m');
-  tile(fmtM(R.curve.quantile(0.9)), '90 % of residents within');
-  tile(`${Math.round(R.curve.shareWithin(1000) * 100)} %`, 'residents within 1 km');
-  tile(`${Math.round((R.uninhabited / SITES.length) * 100)} %`, 'sites on uninhabited hectares');
+  tile(fmtM(R.curve.quantile(0.5)), '50% of residents within');
+  tile(fmtM(R.curve.quantile(0.9)), '90% of residents within');
+  tile(`${Math.round(R.curve.shareWithin(500) * 100)}%`, 'residents within 500 m');
+  tile(`${Math.round(R.curve.shareWithin(1000) * 100)}%`, 'residents within 1 km');
+  tile(`${Math.round((R.uninhabited / SITES.length) * 100)}%`, 'sites on uninhabited hectares');
   body.append(tiles);
 
   const s1 = el('div', 'sec');
   s1.append(el('h3', null, 'Residents by distance to the nearest site'));
   s1.append(cdfChart(R.curve, { tip: tip2, hideTip }));
-  s1.append(el('p', 'note', 'Share of residents whose hectare centre lies within a given straight-line distance of a site. Distance alone says nothing about signal coverage (terrain, power and antenna direction matter).'));
+  s1.append(el('p', 'note', 'Straight-line distance from each hectare\'s centre. Distance is not signal coverage: terrain, power and antenna direction matter.'));
   body.append(s1);
 
   const s2 = el('div', 'sec');
@@ -1816,7 +1823,11 @@ function renderAnalysis() {
   const table = el('table', 'corr');
   const thead = el('thead');
   const hr = el('tr');
-  for (const h of ['Grid cell', 'Cells', 'Spearman ρ', 'Pearson r (log)']) hr.append(el('th', null, h));
+  for (const [h, title] of [['Cell size'], ['Cells'], ['Spearman ρ', 'Rank correlation: 0 = none, 1 = perfect'], ['Pearson r (log)', 'Correlation of log(1 + count)']]) {
+    const th = el('th', null, h);
+    if (title) th.title = title;
+    hr.append(th);
+  }
   thead.append(hr);
   const tbody = el('tbody');
   for (const s of SCALES) {
@@ -1832,14 +1843,14 @@ function renderAnalysis() {
   }
   table.append(thead, tbody);
   s2.append(table);
-  s2.append(el('p', 'note', 'Residents vs number of sites per LV95 grid cell. Cells with neither residents nor sites (lakes, forest, mountains) are left out, so zero–zero cells do not inflate the result. Coarser cells correlate more strongly; click a row to plot it.'));
+  s2.append(el('p', 'note', 'Residents vs sites per grid cell; cells with neither are left out. Larger cells correlate more strongly. Click a row to plot it.'));
   body.append(s2);
 
   const s = state.analysisScale, sc = R.byScale[s];
   const s3 = el('div', 'sec');
   s3.append(el('h3', null, `Residents vs sites per ${blockLabel(s)} cell`));
   const key = el('div', 'chart-key');
-  key.append(el('span', 'pt', `${blockLabel(s)} cells (${nf.format(sc.n)})`), el('span', 'ln', 'mean sites'));
+  key.append(el('span', 'pt', `${blockLabel(s)} cells (${nf.format(sc.n)})`), el('span', 'ln', 'average sites'));
   s3.append(key);
   s3.append(scatterChart(sc.pairs, {
     tip: tip2, hideTip,
@@ -1852,7 +1863,7 @@ function renderAnalysis() {
   const ax = el('div', 'axis-note');
   ax.append(el('span', null, '↑ antenna sites'), el('span', null, 'residents →'));
   s3.append(ax);
-  s3.append(el('p', 'note', `Both axes are log(1 + x). Site counts are whole numbers, so points are jittered vertically. The column at 0 residents holds uninhabited cells that contain sites. Spearman ρ = ${sc.rho.toFixed(2)} at this grid size.`));
+  s3.append(el('p', 'note', 'Log scales (1 + x). Points are jittered vertically because site counts are whole numbers. The column at 0 holds cells with sites but no residents.'));
   body.append(s3);
   console.debug(`analysis rendered in ${Math.round(performance.now() - t0)} ms`);
 }
@@ -1944,15 +1955,12 @@ function setupSearch() {
     box.classList.add('error');
     const msg = $('loading-msg');
     msg.textContent = '';
-    msg.append(e.message === 'file'
-      ? 'Open this page through the local server: run '
-      : 'Could not load the hectare data. Build it and start the server with ');
-    msg.append(el('code', null, 'python3 serve.py'), ' from the repository root.');
+    if (e.message === 'file') msg.append('Open this page through the local server: run ', el('code', null, 'python3 serve.py'), ' from the repository root.');
+    else msg.append('Could not load the population data. Reload the page; if you run it locally, start ', el('code', null, 'python3 serve.py'), ' from the repository root.');
     console.error(e);
     return;
   }
-  $('subtitle').textContent =
-    `Permanent residents per hectare · 31 Dec ${META.year} · ${nf.format(N)} inhabited hectares`;
+  $('subtitle').textContent = `Population per hectare · 31 Dec ${META.year}`;
   $('loading-msg').textContent = 'Matching antenna sites to hectares…';
   await new Promise((r) => setTimeout(r, 0));
   const t0 = performance.now();

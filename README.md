@@ -1,25 +1,26 @@
-# Intro
-This repo visualizes the Swiss population grid: an interactive web map of the permanent resident population per hectare (100 × 100 m), from the Federal Statistical Office's STATPOP 2024 geodata (reference date 31 Dec 2024). The map also shows OFCOM's mobile antenna sites, so you can see how antenna locations relate to where people live.
+# Swiss atlas
 
-Live: **https://arman-maghsoudnia.github.io/swiss-atlas/**
+An interactive map of Switzerland at hectare resolution (100 × 100 m). It shows where people live, from the Federal Statistical Office's STATPOP 2024 data (31 Dec 2024), and where the mobile antenna sites are, from OFCOM, on swisstopo basemaps.
+
+**Live map:** https://arman-maghsoudnia.github.io/swiss-atlas/
 
 # Data sources and terms of use
 
-The repo ships only the data derived for the map (`web/data/`). The raw source files are not committed; download them as shown below if you want to rebuild `web/data`. The derived files remain subject to the terms of their sources, and the source must be cited wherever the data or the map is shown (the map does this in its attribution line).
+The repo includes only the data derived for the map (`web/data/`). To rebuild it, download the raw files as shown below. The derived files stay under their sources' terms, and the source must be cited wherever the data or the map is shown (the map does this in its credits).
 
 - **Population**: STATPOP 2024 geodata, Federal Statistical Office (FSO), [catalogue page](https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html). Terms: open use, source must be cited — "STATPOP2024, FSO GEOSTAT".
   ```sh
   curl -L -o ag-b-00.03-vz2024statpop.zip https://dam-api.bfs.admin.ch/hub/api/dam/assets/36171301/master
   unzip ag-b-00.03-vz2024statpop.zip -d ag-b-00.03-vz2024statpop   # -> ag-b-00.03-vz2024statpop/STATPOP2024.csv
   ```
-- **Antenna sites**: OFCOM layer `ch.bakom.standorte-mobilfunkanlagen` (see [AntennaLocation/README.md](AntennaLocation/README.md)). Terms: open use, source must be cited — "Federal Office of Communications OFCOM". The snapshot in `web/data/` has 22,238 sites: Swisscom, Salt, Sunrise, SBB (railway GSM-R) and 20 German-network 2G stations near the border. Each coordinate is the position of the station's first mast. The data comes from the operators, and OFCOM gives no guarantee of its accuracy. OFCOM updates the file regularly, so a fresh download gives slightly different numbers.
+- **Antenna sites**: OFCOM layer `ch.bakom.standorte-mobilfunkanlagen` (see [AntennaLocation/README.md](AntennaLocation/README.md)). Terms: open use, source must be cited — "Federal Office of Communications OFCOM". The snapshot in `web/data/` has 22,238 sites: Swisscom, Salt, Sunrise, SBB (railway GSM-R) and 20 German-network 2G sites near the border. Each site is placed at its first mast. The operators supply the data and OFCOM does not guarantee its accuracy. OFCOM updates the file regularly, so a new download gives slightly different numbers.
   ```sh
   curl -L -o AntennaLocation/standorte-mobilfunkanlagen_2056.json https://data.geo.admin.ch/ch.bakom.standorte-mobilfunkanlagen/standorte-mobilfunkanlagen/standorte-mobilfunkanlagen_2056.json
   ```
 - **Basemaps, terrain, search and commune names**: swisstopo / geo.admin.ch services, fetched at runtime and never stored in the repo. Terms: free use with the source cited ("© swisstopo"), subject to the geo.admin.ch [terms of use](https://www.geo.admin.ch/en/general-terms-of-use-fsdi) and fair-use limits.
 - **Libraries** in `web/vendor/` keep their own licenses (MIT, BSD-3-Clause, Apache-2.0); see [web/vendor/README.md](web/vendor/README.md).
 
-After downloading, rebuild with `python3 serve.py --rebuild`. A plain `python3 serve.py` only rebuilds from sources newer than `web/data`, and `unzip` keeps the archive's 2025 file dates.
+After downloading, run `python3 serve.py --rebuild`. Without `--rebuild`, `serve.py` only rebuilds when a source is newer than `web/data`, and `unzip` keeps the archive's 2025 file dates.
 
 # Run it
 
@@ -29,11 +30,11 @@ python3 serve.py --port 9000 --no-browser
 python3 serve.py --rebuild  # force a rebuild of web/data
 ```
 
-Only Python 3 (standard library) is needed. The map libraries are bundled in `web/vendor/`. swisstopo basemaps, terrain, search and commune lookups go through `serve.py`, which caches them in `.cache/geo/` (see *Offline resilience* below). An internet connection is only needed for things that were never viewed before.
+Only Python 3 is needed (standard library). The map libraries are bundled in `web/vendor/`. `serve.py` proxies swisstopo's basemaps, terrain, search and commune lookups and caches them in `.cache/geo/` (see *Offline resilience*), so you only need an internet connection for areas you haven't viewed before.
 
 # Hosting on GitHub Pages
 
-`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`, but only while the repository is public (a Pages site is always public). Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so visitors' browsers load swisstopo's maps directly, which their terms allow.
+`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow.
 
 # Deployment (nginx)
 
@@ -49,17 +50,17 @@ Only Python 3 (standard library) is needed. The map libraries are bundled in `we
 
 # What's in the map
 
-- **Colour by**: residents or households per hectare, nationality, place of birth, age (mean age, 0–19, 20–64, 65+, 80+), share of women, mobility (new arrivals, long-term residents, moved from abroad/another canton), household size, single-person households, or **any of the 77 published attributes** (as a count or as a % of residents).
-- **Zoom-dependent resolution**: 100 m hectares when zoomed in. When zoomed out, the map shows 200 m – 2 km blocks, because a hectare is smaller than a pixel there. Rates are computed over each block; counts show the mean per inhabited hectare, so colours stay comparable across zoom levels.
-- **Legend**: rounded quantile classes, each with its number of hectares. Click a class to show only that class.
+- **Colour by**: residents or households per hectare, nationality, place of birth, age (average age, 0–19, 20–64, 65+, 80+), share of women, mobility (newcomers, long-standing residents, moved from abroad/another canton), household size, single-person households, or **any of the 77 published attributes** (as a count or as a share of residents or households).
+- **Zoom-dependent resolution**: 100 m hectares when zoomed in. When zoomed out, the map shows 200 m – 2 km blocks, because a hectare is smaller than a pixel there. Shares and averages are computed over each block; counts show the average per inhabited hectare, so colours stay comparable across zoom levels.
+- **Legend**: fixed classes for residents, households and women, rounded quantile classes otherwise, each with its number of hectares. Click a class to show only that class.
 - **View**: *Flat*, *Columns* (extruded, height = residents) or *Terrain*. Terrain drapes everything over swisstopo's 3D relief (swissALTI3D, via the `maplibre-gl-3dtiles-terrain` plugin), with a relief-exaggeration slider. In terrain mode, the population is drawn as map tiles on demand from the same data and classes, choosing the grid size from each tile's zoom, so distant areas use coarser blocks. The smooth heatmap is draped too. Antennas, the selected hectare and the radius circle sit on the terrain. Right-drag or Ctrl + drag to tilt and turn.
 - **Click a hectare**: commune name (from geo.admin.ch), age–sex pyramid, nationality, place of birth, time in the commune, residence a year ago, and household sizes. You can also summarise everything **within a radius** (500 m – 20 km) or **in the current map view**.
 - **Search**: places, postcodes and addresses (geo.admin.ch search API). Picking an address selects its hectare.
-- **Smooth heatmap** (View → *Smooth heatmap*): turns the grid into a continuous surface with a Gaussian kernel (σ from 100 m to 5 km). Rates are kernel-weighted, i.e. smoothed numerator ÷ smoothed denominator, so small cells don't weigh like big ones. Counts are the mean per inhabited hectare. The surface fades out where few hectares are inhabited, and it is computed on a 100 m raster (200/500 m for large σ) in about 1 s.
+- **Smooth heatmap** (View → *Smooth heatmap*): turns the grid into a continuous surface with a Gaussian kernel (σ from 100 m to 5 km). Rates are kernel-weighted, i.e. smoothed numerator ÷ smoothed denominator, so small cells don't weigh like big ones. Counts are the average per inhabited hectare. The surface fades out where few hectares are inhabited, and it is computed on a 100 m raster (200/500 m for large σ) in about 1 s.
 - **Antenna sites**: toggle the layer, filter by operator, technology (offers 5G/4G/3G/2G) and type (outdoor > 6 W, small cells, tunnel). Colour by operator, technology or type (shapes repeat the category), and size markers by power class. Hover or click a site for its type, technology, power, permit and limit value, the residents within 500 m / 1 km, and a radius summary around it.
 - **Distance to the nearest antenna site** (Colour by → Antennas): straight-line distance from each hectare to the nearest site that passes the filters, e.g. distance to the nearest Salt 5G site.
-- **Antennas vs population** panel: residents per site; the population-weighted distance to the nearest site (median, 90th percentile, share within 500 m / 1 km, and a cumulative curve); the share of sites on uninhabited hectares; the Spearman/Pearson correlation between residents and sites per cell at 500 m – 10 km; and a scatter plot of residents vs sites per cell. Hovering a point outlines its cell on the map, and clicking flies there. Everything follows the antenna filters and the non-geocoded toggle.
-- **Basemaps** (swisstopo, free, no key): SWISSIMAGE aerial imagery with or without labels, national map (colour/grey), light base map, base map. A *Dim basemap* slider makes the data stand out on imagery.
+- **Antennas vs population** panel: residents per site; the population-weighted distance to the nearest site (median, 90th percentile, share within 500 m / 1 km, and a cumulative curve); the share of sites on uninhabited hectares; the Spearman/Pearson correlation between residents and sites per cell at 500 m – 10 km; and a scatter plot of residents vs sites per cell. Hovering a point outlines its cell on the map, and clicking flies there. Everything follows the antenna filters and the *Exclude unlocated residents* toggle.
+- **Basemaps** (swisstopo, free, no key): aerial imagery (SWISSIMAGE) with or without labels, the national map in colour or grey, a light map and a standard map. A *Dim basemap* slider makes the data stand out on imagery.
 
 # Offline resilience (local copies of swisstopo data)
 
@@ -76,7 +77,7 @@ The app never calls swisstopo or a CDN directly when served by `serve.py` or the
 # Caveats (from the FSO data description)
 
 - **Data protection**: every value from 1 to 3 is published as **3**. Summing hectares therefore overstates totals: the grid sums to 9,123,704 residents, while the commune file sums to 9,051,029. Rates on small cells are noisy, so the map greys out cells below a minimum population (default 10, adjustable).
-- **Non-geocoded residents**: 53,619 people without a geocoded address are placed on the hectare at their commune's centre (listed in `STATPOP2024_NOLOC.csv`). This creates artificial peaks, which you can remove with *Remove non-geocoded residents*.
+- **Unlocated residents**: 53,619 people whose building has no coordinates are placed on the hectare at their commune's centre (listed in `STATPOP2024_NOLOC.csv`). This creates false peaks, which you can remove with *Exclude unlocated residents*.
 - **Correlation depends on the grid size.** With the default filters, Spearman ρ between residents and sites per cell is about 0.17 at 500 m, 0.33 at 1 km, 0.53 at 2 km, 0.81 at 5 km and 0.91 at 10 km. Cells with neither residents nor sites are excluded. About half of all sites stand on hectares without residents (hills, roads, commercial buildings), and distance to a site is not signal coverage.
 - Coordinates are the LV95 south-west corner of each hectare. They are converted to WGS84 with swisstopo's approximate formulas, accurate to about 1 m.
 

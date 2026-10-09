@@ -157,7 +157,7 @@ export function scatterChart(pairs, { tip, hideTip, onHover, onClick }) {
   const canvas = document.createElement('canvas');
   canvas.width = W * dpr; canvas.height = H * dpr;
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', `Scatter plot of residents against antenna sites per ${pairs.s / 1000} km cell`);
+  canvas.setAttribute('aria-label', `Scatter plot of residents against antenna sites per ${pairs.s >= 1000 ? `${pairs.s / 1000} km` : `${pairs.s} m`} cell`);
   const over = document.createElement('canvas');
   over.width = W * dpr; over.height = H * dpr;
   over.className = 'over';
