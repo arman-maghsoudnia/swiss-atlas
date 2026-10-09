@@ -74,7 +74,7 @@ python3 -m unittest discover -s tests -p "test_*.py"  # serve.py and the build s
 SPG_E2E=1 node --test tests/e2e.test.mjs              # the page in headless Chrome (set CHROME=... if it is not found)
 ```
 
-No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild, which runs only when the raw source files are present. The browser test blocks geo.admin.ch and uses no basemap, so it runs offline. GitHub Actions runs all three on every push (`.github/workflows/tests.yml`).
+No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild, which runs only when the raw source files are present. The browser test uses no basemap and answers geo.admin.ch itself, with canned replies for a search and a commune boundary and errors for the rest, so it runs offline. GitHub Actions runs all three on every push (`.github/workflows/tests.yml`).
 
 # Hosting on GitHub Pages
 
@@ -111,17 +111,20 @@ scripts/build_data.py      STATPOP CSV -> web/data/cells.bin.gz (gzipped uint16 
 scripts/build_antennas.py  OFCOM GeoJSON -> web/data/antennas.json (column arrays)
 serve.py                   builds if needed, serves web/ on localhost
 web/index.html             page shell
-web/app.js                 main module: state, metrics, classification, map layers, panels, search
+web/app.js                 main module: state, metrics, classification, map layers, panels, search, communes, exports
 web/antennas.js            antenna loading, filters, spatial index, nearest-site search, marker shapes
 web/smooth.js              kernel smoothing (rasterise, Gaussian blur, georeferenced tiles)
 web/smooth-worker.js       runs the blur in a Web Worker so the map stays responsive
 web/analysis.js            correlation statistics, distance curve and scatter chart
 web/terrain.js             swisstopo terrain, on-demand population tiles for draping, antenna marker images
 web/remote.js              routes swisstopo URLs through the caching proxy when it is available
-web/geo.js                 LV95 <-> WGS84
+web/geo.js                 LV95 <-> WGS84, point-in-area test for commune boundaries
 web/vendor/                pinned third-party libraries (see its README)
 web/geo/health             answers the proxy probe on static hosts without the proxy (serve.py and nginx answer it themselves)
 web/style.css              styles (light/dark follow the OS setting)
+web/data/                  built data (cells.bin.gz, meta.json, antennas.json)
+web/preview.jpg            link preview image (Open Graph)
+tests/                     unit tests (node --test, unittest) and the headless-Chrome browser test
 deploy/                    nginx + password login for a server deployment (install.sh, login.html, nginx-locations.conf)
 ```
 
