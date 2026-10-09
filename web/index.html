@@ -48,6 +48,9 @@
         <button id="share" class="icon-btn" type="button" aria-label="Share this view" title="Share this view (link with the current map and settings)">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6.6 9.4l2.8-2.8M7.2 4.6l.9-.9a2.6 2.6 0 0 1 3.7 3.7l-.9.9M8.8 11.4l-.9.9a2.6 2.6 0 0 1-3.7-3.7l.9-.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         </button>
+        <button id="save-image" class="icon-btn" type="button" aria-label="Save the map as an image" title="Save the map as an image (PNG, with legend and sources)">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 2.5v7M5 6.8l3 3 3-3M3 10.5v2.2c0 .4.3.8.8.8h8.4c.5 0 .8-.4.8-.8v-2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button id="collapse" class="icon-btn" aria-expanded="true" aria-controls="panel-body" aria-label="Map controls" title="Collapse panel">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -56,7 +59,7 @@
 
     <div id="panel-body">
       <div class="search">
-        <input id="search" type="search" role="combobox" aria-expanded="false" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-autocomplete="list" aria-controls="search-results">
+        <input id="search" type="search" role="combobox" aria-expanded="false" placeholder="Find a place, postcode or address" autocomplete="off" spellcheck="false" aria-label="Search places" aria-keyshortcuts="/" aria-autocomplete="list" aria-controls="search-results">
         <ul id="search-results" role="listbox" aria-label="Search results" hidden></ul>
       </div>
 

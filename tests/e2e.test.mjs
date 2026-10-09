@@ -167,6 +167,27 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.ok(await ev(`!document.getElementById('detail').hidden`));
   });
 
+  test('exports: the map as a PNG with its legend, the details as CSV', async () => { // the search left a hectare open
+    const ev = page.ev;
+    await ev(`(() => { window.__files = []; HTMLAnchorElement.prototype.click = function () {
+      window.__files.push(fetch(this.href).then((r) => r.arrayBuffer()).then((b) => ({ name: this.download, bytes: [...new Uint8Array(b)] }))); }; })()`);
+    const files = () => ev(`Promise.all(window.__files).then((f) => { window.__files = []; return f; })`);
+    await ev(`document.getElementById('save-image').click()`);
+    assert.ok(await page.waitFor(`window.__files.length === 1`, 60_000), 'image saved'); // PNG encoding is slow in software rendering
+    const [png] = await files();
+    assert.match(png.name, /^swiss-atlas-pop-\d{4}-\d\d-\d\d\.png$/);
+    assert.deepEqual(png.bytes.slice(1, 4), [80, 78, 71], 'PNG signature');
+    const csvBtn = `[...document.querySelectorAll('#detail .link-btn')].find((b) => b.textContent === 'Download as CSV')`;
+    await ev(`${csvBtn}.click()`);
+    assert.ok(await page.waitFor(`window.__files.length === 1`, 5000), 'CSV saved');
+    const [csv] = await files();
+    assert.deepEqual(csv.bytes.slice(0, 3), [0xef, 0xbb, 0xbf], 'UTF-8 byte-order mark, for Excel');
+    const text = new TextDecoder().decode(new Uint8Array(csv.bytes)); // drops the mark
+    assert.ok(text.startsWith('area,code,attribute,value,source\r\n'), text.slice(0, 60));
+    assert.match(text, /\r\n"Hectare E 2683100, N 1247100 [^\r\n]*",BBTOT,"Residents, total",\d+,"STATPOP2024, FSO GEOSTAT"\r\n/);
+    assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
+  });
+
   test('phone: folded panel, collapsed credits, details as a sheet', async () => {
     await page.ev(`localStorage.removeItem('spg-settings')`).catch(() => {});
     await load(375, 812, true);

@@ -800,6 +800,9 @@ map.addControl(new maplibregl.AttributionControl({
 }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+if (isSecureContext && navigator.geolocation) { // browsers only share the position with https pages
+  map.addControl(new maplibregl.GeolocateControl({ fitBoundsOptions: { maxZoom: 14 } }), 'bottom-right');
+}
 if (narrow()) { // the expanded credits would cover the bottom of a phone screen; the (i) button opens them
   const attrib = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
   attrib?.classList.remove('maplibregl-compact-show');
@@ -1575,6 +1578,14 @@ function buildControls() {
   if (narrow()) setCollapsed(true);
   $('collapse').addEventListener('click', () => setCollapsed(!$('panel').classList.contains('collapsed')));
   $('share').addEventListener('click', shareView);
+  $('save-image').addEventListener('click', saveImage);
+  // "/" jumps to the search box, as on many sites.
+  addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, select, textarea, [contenteditable]')) return;
+    e.preventDefault();
+    setCollapsed(false);
+    $('search').focus();
+  });
 
   // detail panel
   $('d-close').addEventListener('click', closeDetail);
@@ -1772,6 +1783,161 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
 }
+
+// Files made in the page (an image of the map, the details as CSV) are handed over as downloads.
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+
+// The map as a PNG, with a footer that names what it shows and credits the sources, as their terms
+// ask. WebGL does not keep a frame once it is on screen, so the canvas is copied in the frame itself.
+async function saveImage() {
+  if (!CLASSES) return;
+  const btn = $('save-image');
+  btn.disabled = true;
+  toast('Preparing the image…');
+  try {
+    // wait for tiles still loading (at most 8 s), so the image is not missing parts of the basemap
+    if (!map.loaded()) await Promise.race([new Promise((r) => map.once('idle', r)), new Promise((r) => setTimeout(r, 8000))]);
+    const src = map.getCanvas();
+    const shot = await new Promise((resolve) => {
+      map.once('render', () => {
+        const c = document.createElement('canvas');
+        c.width = src.width; c.height = src.height;
+        c.getContext('2d').drawImage(src, 0, 0);
+        resolve(c);
+      });
+      map.triggerRepaint();
+    });
+    const out = imageWithFooter(shot, src.width / src.clientWidth);
+    const blob = await new Promise((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob'))), 'image/png'));
+    download(`swiss-atlas-${CLASSES.m.id.replace(/\W+/g, '-')}-${today()}.png`, blob);
+    toast('Image saved');
+  } catch (e) {
+    console.error(e);
+    toast('Could not save the image');
+  } finally {
+    btn.disabled = false;
+  }
+}
+function imageWithFooter(shot, k) {
+  const css = getComputedStyle(document.documentElement), tok = (n, d) => css.getPropertyValue(n).trim() || d;
+  const family = tok('--font', 'system-ui, sans-serif'), muted = tok('--text-muted', '#6e6c66');
+  const font = (px, weight = 400) => `${weight} ${px * k}px ${family}`;
+  const W = shot.width, pad = 14 * k, line = 20 * k, sw = 11 * k;
+  // the footer's contents: a title, legend entries (swatch, label) and the credits
+  const { m, labels, ramp, naCount, rate } = CLASSES;
+  const legend = state.smooth ? [{ gradient: ramp, label: `${labels[0]} … ${labels.at(-1)}` }]
+    : labels.map((label, i) => ({ color: `rgb(${ramp[i].join(',')})`, label }));
+  if (naCount && !state.smooth) { // as in the panel's legend
+    legend.push({ color: NA_COLOR[basemapDark() ? 'dark' : 'light'], label: rate ? `Under ${state.minPop} residents or no value` : m.kind === 'count' ? '0' : 'No value' });
+  }
+  if (A && state.ant.show && SITES.length) {
+    const mode = ANT.COLOR_MODES[state.ant.color], pal = ANT.PALETTE[basemapDark() ? 'dark' : 'light'];
+    const counts = new Array(mode.cats.length).fill(0);
+    for (const i of SITES) counts[mode.of(A, i)]++;
+    mode.cats.forEach((label, i) => {
+      if (counts[i]) legend.push({ color: pal[i], shape: ANT.SHAPES[i], label: state.ant.color === 'single' ? 'Antenna sites' : label });
+    });
+  }
+  const site = `Swiss atlas · ${location.host}${location.pathname}`.replace(/\/$/, '');
+  let credits = ($('map').querySelector('.maplibregl-ctrl-attrib-inner')?.textContent || '').replace(/\s*\|\s*/g, ' · ');
+  // Lay out twice: once to measure the footer, once to draw it.
+  const out = document.createElement('canvas'), g = out.getContext('2d');
+  g.font = font(15, 650);
+  const titleW = g.measureText(m.label).width;
+  g.font = font(12);
+  const siteRight = titleW + 24 * k + g.measureText(site).width <= W - 2 * pad; // else it ends the credits
+  if (!siteRight) credits += ` · ${site}`;
+  const run = (draw) => {
+    let y = pad + 15 * k;
+    g.textBaseline = 'alphabetic';
+    g.font = font(15, 650);
+    if (draw) { g.fillStyle = tok('--text-primary', '#0b0b0b'); g.fillText(m.label, pad, y); }
+    g.font = font(12);
+    if (draw && siteRight) { g.fillStyle = muted; g.textAlign = 'right'; g.fillText(site, W - pad, y); g.textAlign = 'left'; }
+    y += line;
+    let x = pad;
+    for (const it of legend) {
+      const w = (it.gradient ? 90 * k : sw) + 6 * k + g.measureText(it.label).width;
+      if (x > pad && x + w > W - pad) { x = pad; y += line; }
+      if (draw) drawSwatch(g, it, x, y - sw, sw, k);
+      if (draw) { g.fillStyle = tok('--text-secondary', '#52514e'); g.fillText(it.label, x + (it.gradient ? 90 * k : sw) + 6 * k, y); }
+      x += w + 16 * k;
+    }
+    g.font = font(11);
+    y += line * 1.1;
+    let text = '';
+    for (const word of credits.split(' ')) { // wrap the credits
+      const next = text ? `${text} ${word}` : word;
+      if (text && g.measureText(next).width > W - 2 * pad) { if (draw) { g.fillStyle = muted; g.fillText(text, pad, y); } y += 15 * k; text = word; } else text = next;
+    }
+    if (draw && text) { g.fillStyle = muted; g.fillText(text, pad, y); }
+    return y + pad;
+  };
+  out.width = W;
+  g.font = font(12);
+  const footer = Math.ceil(run(false));
+  out.height = shot.height + footer; // resizing resets the context
+  g.drawImage(shot, 0, 0);
+  g.fillStyle = tok('--surface-1', '#fcfcfb');
+  g.fillRect(0, shot.height, W, footer);
+  g.translate(0, shot.height);
+  run(true);
+  return out;
+}
+function drawSwatch(g, it, x, y, s, k) {
+  if (it.gradient) {
+    const grad = g.createLinearGradient(x, 0, x + 90 * k, 0);
+    it.gradient.forEach((c, i) => grad.addColorStop(i / (it.gradient.length - 1), `rgb(${c.join(',')})`));
+    g.fillStyle = grad;
+    g.fillRect(x, y, 90 * k, s);
+    return;
+  }
+  g.fillStyle = it.color;
+  g.beginPath();
+  const c = s / 2;
+  if (it.shape === 'circle') g.arc(x + c, y + c, c, 0, 2 * Math.PI);
+  else if (it.shape === 'triangle') { g.moveTo(x + c, y); g.lineTo(x + s, y + s); g.lineTo(x, y + s); }
+  else if (it.shape === 'diamond') { g.moveTo(x + c, y); g.lineTo(x + s, y + c); g.lineTo(x + c, y + s); g.lineTo(x, y + c); }
+  else g.rect(x, y, s, s);
+  g.fill();
+}
+
+// The details as CSV: one row per attribute of the hectare, radius or view. The source column carries
+// the attribution the FSO and OFCOM terms ask for; the byte-order mark makes Excel read UTF-8.
+function detailCsv() {
+  const { sums } = aggregate(scopeIndices());
+  const c = center(), i = state.selected, ai = state.antenna, scope = state.scope;
+  const place = ai >= 0 ? `antenna site ${A.name[ai]} (E ${Math.round(A.e[ai])}, N ${Math.round(A.N[ai])})` : c ? `E ${Math.round(c[0])}, N ${Math.round(c[1])}` : '';
+  let area;
+  if (scope === 'view') {
+    const { lng, lat } = map.getCenter();
+    area = `Map view around ${lat.toFixed(4)} N ${lng.toFixed(4)} E, zoom ${map.getZoom().toFixed(1)}`;
+  } else if (scope === 'radius') area = `Within ${fmtKm(state.radiusKm)} of ${place} (LV95)`;
+  else if (ai >= 0) area = `Hectare of ${place} (LV95)`;
+  else {
+    const name = $('d-title').textContent;
+    area = `Hectare E ${cellE(i)}, N ${cellN(i)} (LV95 south-west corner)${name && name !== 'Hectare' && !name.endsWith('…') ? `, ${name}` : ''}`;
+  }
+  if (state.excludeNoloc) area += ', residents without exact location excluded';
+  const rows = [['area', 'code', 'attribute', 'value', 'source']];
+  for (const code of META.columns) if (code in sums) rows.push([area, code, META.labels[code], Math.round(sums[code]), META.source]);
+  if (A) {
+    const f = state.ant, filtered = f.ops.some((v, k) => !v && opCounts()[k]) || f.tech || f.type;
+    rows.push([area, 'SITES', `Mobile antenna sites${filtered ? ' (current filters)' : ''}`, scopeSites().length, 'OFCOM']);
+  }
+  rows.push([area, 'NOTE', 'The FSO publishes counts of 1–3 as 3, so the parts of a total can add up to slightly more or less.', '', META.source]);
+  const cell = (v) => (/[",\r\n]/.test(String(v)) ? `"${String(v).replaceAll('"', '""')}"` : String(v));
+  return `\ufeff${rows.map((r) => r.map(cell).join(',')).join('\r\n')}\r\n`;
+}
 function setCollapsed(collapsed) {
   $('panel').classList.toggle('collapsed', collapsed);
   $('collapse').setAttribute('aria-expanded', String(!collapsed));
@@ -1936,8 +2102,14 @@ function renderDetail() {
   body.append(pyramid(sums, isCell));
   for (const sec of SECTIONS) body.append(barSection(sec, sums, isCell));
 
+  const links = el('div', 'links');
+  const csv = el('button', 'link-btn', 'Download as CSV');
+  csv.type = 'button';
+  csv.addEventListener('click', () => download(`swiss-atlas-${scope === 'cell' ? 'hectare' : scope}-${today()}.csv`,
+    new Blob([detailCsv()], { type: 'text/csv;charset=utf-8' })));
+  links.append(csv);
+  body.append(links);
   if (c && scope !== 'view') {
-    const links = el('div', 'links');
     const a = el('a', null, 'Open in map.geo.admin.ch ');
     const arrow = el('span', null, '↗');
     arrow.setAttribute('aria-hidden', 'true');
@@ -1946,7 +2118,6 @@ function renderDetail() {
     a.target = '_blank';
     a.rel = 'noopener';
     links.append(a);
-    body.append(links);
   }
   if (!isCell) {
     body.append(el('p', 'note', 'Sums of hectare values. Counts of 1–3 are published as 3, so totals run slightly high.'));
