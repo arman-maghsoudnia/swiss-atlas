@@ -52,7 +52,7 @@
   </style>
 </head>
 <body>
-  <form id="f" autocomplete="on">
+  <form id="f" method="post" autocomplete="on"><!-- post: should the script fail, the password never ends up in a URL -->
     <h1>Swiss atlas</h1>
     <p data-t="intro">Population per hectare and mobile antenna sites. Enter the password to continue.</p>
     <label for="pw" data-t="password">Password</label>
@@ -77,14 +77,17 @@
         password: 'Password', open: 'Apri la carta', tooMany: 'Troppi tentativi. Attendi un minuto e riprova.',
         wrong: 'Password errata.', offline: 'Impossibile raggiungere il server.' },
     };
-    const known = (l) => Object.hasOwn(TEXT, l ?? '');
-    let lang = (/(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(location.hash) || [])[1];
-    if (!known(lang)) { try { lang = localStorage.getItem('spg-lang'); } catch { lang = null; } }
-    if (!known(lang)) lang = (navigator.languages || []).map((l) => l.slice(0, 2).toLowerCase()).find(known) || 'en';
-    const T = TEXT[lang];
-    document.documentElement.lang = lang;
-    document.title = T.title;
-    document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = T[e.dataset.t]; });
+    let T = TEXT.en;
+    try { // never let this stop the sign-in below
+      const known = (l) => ['en', 'de', 'fr', 'it'].includes(l);
+      let lang = (/(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(location.hash) || [])[1];
+      if (!known(lang)) { try { lang = localStorage.getItem('spg-lang'); } catch { lang = null; } }
+      if (!known(lang)) lang = (navigator.languages || []).map((l) => l.slice(0, 2).toLowerCase()).find(known) || 'en';
+      T = TEXT[lang];
+      document.documentElement.lang = lang;
+      document.title = T.title;
+      document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = T[e.dataset.t]; });
+    } catch { /* English */ }
     // The cookie holds SHA-256("spg-v1:" + password); nginx compares it with the stored hash.
     // crypto.subtle is unavailable on plain http://, hence this small SHA-256.
     function sha256(text) {

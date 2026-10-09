@@ -8,33 +8,37 @@
 // languages, else English. Switching reloads the page, which keeps the view (it is in the URL).
 // index.html picks the same language early, to hide the English page text until it is translated.
 
-import de from './i18n/de.js';
-import fr from './i18n/fr.js';
-import it from './i18n/it.js';
-
 export const LANGS = { en: 'English', de: 'Deutsch', fr: 'Français', it: 'Italiano' };
-const DICTS = { en: {}, de, fr, it };
+// Not Object.hasOwn: browsers too old for it must still reach app.js's "browser too old" message.
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 function pick() {
-  const linked = /(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(globalThis.location?.hash ?? '')?.[1];
-  if (Object.hasOwn(DICTS, linked ?? '')) return linked;
+  if (!globalThis.document) return 'en'; // tests in node: whatever the shell's locale
+  const linked = /(?:^#|&)l=([a-z]{2})(?:&|$)/.exec(location.hash)?.[1];
+  if (own(LANGS, linked ?? '')) return linked;
   let saved = null;
-  try { saved = globalThis.localStorage?.getItem('spg-lang'); } catch { /* storage blocked */ }
-  if (Object.hasOwn(DICTS, saved ?? '')) return saved;
-  for (const l of globalThis.navigator?.languages ?? []) {
+  try { saved = localStorage.getItem('spg-lang'); } catch { /* storage blocked */ }
+  if (own(LANGS, saved ?? '')) return saved;
+  for (const l of navigator.languages ?? []) {
     const code = l.slice(0, 2).toLowerCase();
-    if (Object.hasOwn(DICTS, code)) return code;
+    if (own(LANGS, code)) return code;
   }
   return 'en';
 }
 export const lang = pick();
 export const locale = `${lang}-CH`; // Swiss number and date formats: 138’141 (de, it, en), 138 141,5 (fr)
-const strings = DICTS[lang];
+// Only the dictionary in use is loaded (index.html preloads it); should it fail, the page stays in English.
+let shown = lang; // the language the text is in: English when the dictionary could not be loaded
+const strings = lang === 'en' ? {} : await import(`./i18n/${lang}.js`).then((m) => m.default, (e) => {
+  console.error(e);
+  shown = 'en';
+  return {};
+});
 
 /** The text for an English key in the current language, with {name} placeholders filled from vars. */
 export function t(key, vars) {
-  let s = Object.hasOwn(strings, key) ? strings[key] : key;
-  if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (Object.hasOwn(vars, k) ? vars[k] : m));
+  let s = own(strings, key) ? strings[key] : key;
+  if (vars) s = s.replace(/\{(\w+)\}/g, (m, k) => (own(vars, k) ? vars[k] : m));
   return s;
 }
 // Singular or plural by the language's rules (French counts 0 as singular); {n} is the formatted count.
@@ -70,8 +74,11 @@ export function fmtPct(x, d = 0) {
   return f.format(x);
 }
 const dateFmt = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-/** An ISO date (2024-12-31) as 31 Dec 2024, 31. Dez. 2024, 31 déc. 2024, 31 dic 2024. */
-export const fmtDate = (iso) => dateFmt.format(new Date(`${iso}T12:00:00Z`));
+/** An ISO date (2024-12-31) as 31 Dec 2024, 31. Dez. 2024, 31 déc. 2024, 31 dic 2024 (an invalid one as is). */
+export function fmtDate(iso) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? String(iso) : dateFmt.format(d);
+}
 
 // Pages of the data sources in the reader's language.
 export const LINKS = {
@@ -87,11 +94,13 @@ export const LINKS = {
 
 /**
  * Translate the static page: [data-i18n] elements get their text translated (the English text is the
- * key), [data-i18n-attr="aria-label title …"] the named attributes; [data-href] links point to LINKS.
+ * key), [data-i18n-attr="aria-label title …"] the named attributes; [data-href] links point to LINKS;
+ * [data-date] holds an ISO date to show in the language's format.
  */
 export function translatePage(root = document) {
-  document.documentElement.lang = lang;
+  document.documentElement.lang = shown; // for screen readers and hyphenation
   for (const a of root.querySelectorAll('[data-href]')) a.href = LINKS[a.dataset.href];
+  for (const e of root.querySelectorAll('[data-date]')) e.textContent = fmtDate(e.dataset.date);
   if (lang !== 'en') {
     for (const e of root.querySelectorAll('[data-i18n]')) e.textContent = t(e.textContent.trim().replace(/\s+/g, ' '));
     for (const e of root.querySelectorAll('[data-i18n-attr]')) {

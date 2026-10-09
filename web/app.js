@@ -29,7 +29,8 @@ function showFatal(...parts) {
 {
   const problem = !window.maplibregl || !window.deck ? t('The map libraries did not load. Check your connection and reload the page.')
     : !document.createElement('canvas').getContext('webgl2') ? t('This map needs WebGL 2, which this browser or device does not provide. Try an up-to-date Chrome, Firefox, Safari or Edge with hardware acceleration turned on.')
-      : typeof DecompressionStream === 'undefined' ? t('This browser is too old for the map (it needs DecompressionStream: Chrome 80, Firefox 113, Safari 16.4 or newer).')
+      : typeof DecompressionStream === 'undefined' || typeof Object.hasOwn !== 'function'
+        ? t('This browser is too old for the map. It needs Chrome 93, Firefox 113, Safari 16.4 or newer.')
         : null;
   if (problem) { showFatal(problem); throw new Error(problem); }
 }
@@ -190,7 +191,9 @@ function writeHash() {
 // filters and selection would stay as they were. Reopen the page so that the link applies in full.
 // (MapLibre and writeHash() use replaceState, which fires no hashchange.)
 addEventListener('hashchange', () => {
-  if (HASH_KEYS.some((k) => k in hashParams()) && location.hash !== hashFor()) location.reload();
+  const h = hashParams();
+  if (h.l && h.l !== lang && ['en', 'de', 'fr', 'it'].includes(h.l)) location.reload(); // another language
+  else if (HASH_KEYS.some((k) => k in h) && location.hash !== hashFor()) location.reload();
   else writeHash(); // a plain map= link keeps the visitor's own settings, as on load
 });
 
@@ -1638,7 +1641,9 @@ function buildControls() {
   // detail panel
   $('d-close').addEventListener('click', closeDetail);
   document.querySelectorAll('[data-scope]').forEach((b) => b.addEventListener('click', () => {
-    state.scope = b.dataset.scope; syncControls(); renderDetail(); render(); saveSettings();
+    state.scope = b.dataset.scope;
+    if (COMMUNE?.status === 'error') COMMUNE = null; // choosing it again retries a failed boundary load
+    syncControls(); renderDetail(); render(); saveSettings();
   }));
   const radius = $('radius');
   radius.value = String(state.radiusKm);
@@ -2154,7 +2159,10 @@ async function openCommune(bfs, E, Nn) {
   const first = nearest(known?.cells.length ? known.cells : range(0, N - 1)); // the panel opens at once
   if (first < 0) return;
   state.scope = 'commune';
-  if (!known) COMMUNE = { at: pointKey(cellE(first) + 50, cellN(first) + 50), status: 'loading' }; // no lookup by point meanwhile
+  // Known: that commune, even when the anchor lies outside it (a forest commune has no inhabited hectare).
+  // Else loading, so that no lookup by point starts meanwhile.
+  COMMUNE = known ? { ...known, at: pointKey(cellE(first) + 50, cellN(first) + 50), status: 'ok' }
+    : { at: pointKey(cellE(first) + 50, cellN(first) + 50), status: 'loading' };
   selectCell(first, false);
   if (known) return;
   communeCtl?.abort();
@@ -2190,7 +2198,7 @@ function ensureCommune() {
   const c = center();
   if (!c || !N) return;
   const at = pointKey(c[0], c[1]);
-  if (COMMUNE?.at === at && COMMUNE.status !== 'error') return; // a failed load is tried again
+  if (COMMUNE?.at === at) return; // also after an error: retried only when the user picks the scope again
   const known = boundaryOf(c[0], c[1]);
   if (known) { COMMUNE = { ...known, at, status: 'ok' }; return; }
   COMMUNE = { at, status: 'loading' };

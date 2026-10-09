@@ -4,7 +4,7 @@ export default {
   "Swiss atlas – population and mobile antennas": "Swiss atlas – population et antennes de téléphonie mobile",
   "The map libraries did not load. Check your connection and reload the page.": "Les bibliothèques de la carte n’ont pas pu être chargées. Vérifiez votre connexion et rechargez la page.",
   "This map needs WebGL 2, which this browser or device does not provide. Try an up-to-date Chrome, Firefox, Safari or Edge with hardware acceleration turned on.": "Cette carte nécessite WebGL 2, que ce navigateur ou cet appareil ne prend pas en charge. Essayez une version récente de Chrome, Firefox, Safari ou Edge, avec l’accélération matérielle activée.",
-  "This browser is too old for the map (it needs DecompressionStream: Chrome 80, Firefox 113, Safari 16.4 or newer).": "Ce navigateur est trop ancien pour la carte (elle nécessite DecompressionStream\u00a0: Chrome 80, Firefox 113, Safari 16.4 ou plus récent).",
+  "This browser is too old for the map. It needs Chrome 93, Firefox 113, Safari 16.4 or newer.": "Ce navigateur est trop ancien pour la carte. Elle nécessite Chrome 93, Firefox 113, Safari 16.4 ou plus récent.",
   "Population": "Population",
   "Residents per hectare": "Habitants par hectare",
   "Residents": "Habitants",

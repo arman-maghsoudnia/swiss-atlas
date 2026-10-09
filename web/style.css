@@ -127,7 +127,7 @@ select, input[type="search"] {
   border: 1px solid var(--control-border); border-radius: 8px;
   padding: 7px 9px; margin-top: 6px;
 }
-select.compact { width: auto; margin-top: 0; padding: 4px 8px; }
+select.compact { width: auto; max-width: 100%; min-width: 0; margin-top: 0; padding: 4px 8px; } /* shrinks in a narrow row; the browser cuts its text */
 select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 input[type="range"] { width: 100%; accent-color: var(--accent); margin: 6px 0 0; }
 .row input[type="range"] { width: 150px; margin: 0; }
@@ -268,7 +268,7 @@ dl.props dd { margin: 0; color: var(--text-primary); }
 .sec { margin-top: 16px; }
 .sec h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .brow { display: grid; grid-template-columns: 124px 1fr 96px; align-items: center; gap: 8px; padding: 2px 0; }
-.brow .bl { color: var(--text-secondary); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brow .bl { color: var(--text-secondary); font-size: 12px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; } /* long labels wrap (phones have no tooltip) */
 .brow .track { height: 8px; }
 .brow .fill { height: 8px; border-radius: 0 4px 4px 0; background: var(--bar); min-width: 0; }
 .brow .bv { text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }

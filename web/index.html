@@ -34,6 +34,10 @@
         root.lang = l;
         root.classList.add('i18n-pending');
         setTimeout(() => root.classList.remove('i18n-pending'), 4000);
+        const pre = document.createElement('link'); // the one dictionary i18n.js will load
+        pre.rel = 'modulepreload';
+        pre.href = `i18n/${l}.js`;
+        document.head.append(pre);
       }
     } catch { /* show the page in English */ }
     // Start the data downloads (8.5 MB) right away, in parallel with the libraries; app.js picks them up.
@@ -52,9 +56,6 @@
   <link rel="modulepreload" href="terrain.js">
   <link rel="modulepreload" href="remote.js">
   <link rel="modulepreload" href="i18n.js">
-  <link rel="modulepreload" href="i18n/de.js">
-  <link rel="modulepreload" href="i18n/fr.js">
-  <link rel="modulepreload" href="i18n/it.js">
 </head>
 <body>
   <aside id="panel" class="card" aria-label="Map controls" data-i18n-attr="aria-label">
@@ -210,7 +211,7 @@
       </section>
 
       <footer class="src">
-        <span data-i18n>Data:</span> <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" data-href="fso" target="_blank" rel="noopener"><span data-i18n>STATPOP2024, FSO GEOSTAT</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a> (<span id="src-date">31 Dec 2024</span>);
+        <span data-i18n>Data:</span> <a href="https://www.bfs.admin.ch/bfs/en/home/statistics/catalogues-databases.assetdetail.36171301.html" data-href="fso" target="_blank" rel="noopener"><span data-i18n>STATPOP2024, FSO GEOSTAT</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a> (<span id="src-date" data-date="2024-12-31">31 Dec 2024</span>);
         <span data-i18n>antenna sites</span> <a href="https://www.geocat.ch/geonetwork/srv/eng/catalog.search#/metadata/6a972f46-ae47-4db9-b5a7-dcfd3598bd95" data-href="ofcom" target="_blank" rel="noopener"><span data-i18n>Federal Office of Communications OFCOM</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a><span data-i18n>, as supplied by the operators, accuracy not guaranteed.</span>
         <span data-i18n>Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.</span>
         <a href="https://github.com/arman-maghsoudnia/swiss-atlas" target="_blank" rel="noopener"><span data-i18n>Source code</span><span class="sr-only" data-i18n>(opens in a new tab)</span></a> (AGPL-3.0).
