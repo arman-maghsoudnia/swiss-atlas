@@ -140,6 +140,21 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.doesNotMatch(await ev(`location.hash`), /sel=/);
   });
 
+  test('a hand-edited link with stray values still loads; filters go into the URL', async () => {
+    page.errors.length = 0;
+    await page.send('Page.navigate', { url: `${base}?edited=1#map=9/46.948/7.44&mp=50%&m=constructor&t=toString&ty=__proto__&b=constructor` });
+    assert.ok(await page.waitFor(`!document.getElementById('loading') && document.getElementById('kpi-ant').textContent !== '–'`, 90_000), 'loads');
+    const ev = page.ev;
+    assert.equal(await ev(`document.getElementById('metric').value`), 'pop');
+    await ev(`document.querySelector('#ant-ops input').click()`);
+    assert.match(await ev(`location.hash`), /op=0/);
+    await ev(`document.querySelector('#ant-ops input').click()`);
+    await ev(`document.getElementById('sum-view').click()`);
+    assert.match(await ev(`location.hash`), /sc=view/);
+    await ev(`document.getElementById('d-close').click()`);
+    assert.deepEqual(page.errors.filter((e) => !/geo\.admin\.ch|503|terrain/i.test(e)), []);
+  });
+
   test('search: an address flies there and selects its hectare', async () => {
     await load(1280, 800, false);
     const ev = page.ev;
@@ -147,7 +162,7 @@ describe('browser smoke test', { skip, timeout: 240_000 }, () => {
     assert.ok(await page.waitFor(`document.querySelectorAll('#search-results li').length === 1`, 5000), 'search results');
     assert.equal(await ev(`document.querySelector('#search-results li').getAttribute('aria-label')`), 'Bahnhofstrasse 1 8001 Zürich, Address');
     await ev(`document.getElementById('search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))`);
-    assert.ok(await page.waitFor(`location.hash.startsWith('#map=15.5/') && location.hash.includes('sel=2683100,1247100')`, 6000),
+    assert.ok(await page.waitFor(`location.hash.startsWith('#map=15.5/') && location.hash.includes('sel=2683100,1247100')`, 20_000), // CI runners are ~3x slower
       `flew to the address: ${await ev('location.hash')}`);
     assert.ok(await ev(`!document.getElementById('detail').hidden`));
   });

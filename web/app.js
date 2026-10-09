@@ -94,13 +94,18 @@ const DEFAULTS = {
 const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'site', 'sc', 'r']; // see writeHash()
 const saved = loadSettings();
 const state = {
-  ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ...(saved.ant || {}) },
+  ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ops: [...DEFAULTS.ant.ops], ...(saved.ant || {}) },
   isolate: null, selected: -1, antenna: -1, hoverBlock: null, beforeId: undefined,
 };
-stateFromHash();
-if (!BASEMAPS[state.basemap]) state.basemap = DEFAULTS.basemap;
+const BOOT_HASH = hashParams(); // read before anything rewrites the URL (sel= and site= apply once the data is in)
+stateFromHash(BOOT_HASH);
+// Own keys only: a link with b=constructor or t=toString must not match an inherited property.
+if (!Object.hasOwn(BASEMAPS, state.basemap)) state.basemap = DEFAULTS.basemap;
 if (!SIGMAS.includes(state.sigma)) state.sigma = DEFAULTS.sigma;
-if (!ANT.COLOR_MODES[state.ant.color]) state.ant.color = 'single';
+if (!Object.hasOwn(ANT.COLOR_MODES, state.ant.color)) state.ant.color = 'single';
+if (!Object.hasOwn(ANT.TECH, state.ant.tech)) state.ant.tech = '';
+if (!Object.hasOwn(ANT.TYPE_GROUPS, state.ant.type)) state.ant.type = '';
+state.ant.ops = Array.isArray(state.ant.ops) && state.ant.ops.length === 5 ? state.ant.ops.map(Boolean) : [...DEFAULTS.ant.ops];
 if (!['2d', '3d', 'terrain'].includes(state.view)) state.view = '2d';
 if (!['cell', 'radius', 'view'].includes(state.scope)) state.scope = DEFAULTS.scope;
 const isTerrain = () => state.view === 'terrain';
@@ -121,13 +126,13 @@ function saveSettings() {
 function hashParams() {
   return Object.fromEntries(location.hash.slice(1).split('&').filter(Boolean).map((p) => {
     const k = p.indexOf('=');
-    return k < 0 ? [p, ''] : [p.slice(0, k), decodeURIComponent(p.slice(k + 1))];
+    if (k < 0) return [p, ''];
+    try { return [p.slice(0, k), decodeURIComponent(p.slice(k + 1))]; } catch { return [p.slice(0, k), p.slice(k + 1)]; }
   }));
 }
-function stateFromHash() {
-  const h = hashParams();
+function stateFromHash(h) {
   if (!HASH_KEYS.some((k) => k in h)) return;
-  Object.assign(state, { ...DEFAULTS, ant: { ...DEFAULTS.ant, color: state.ant.color, sizeByPower: state.ant.sizeByPower },
+  Object.assign(state, { ...DEFAULTS, ant: { ...DEFAULTS.ant, ops: [...DEFAULTS.ant.ops], color: state.ant.color, sizeByPower: state.ant.sizeByPower },
     heightScale: state.heightScale, opacity: state.opacity, dim: state.dim, analysisScale: state.analysisScale, exaggeration: state.exaggeration });
   if (h.m) state.metric = h.m; // validated once the controls are built
   if (h.a) state.rawCol = h.a;
@@ -139,13 +144,13 @@ function stateFromHash() {
   if (h.b) state.basemap = h.b;
   if (h.an === '0') state.ant.show = false;
   if (/^[01]{5}$/.test(h.op ?? '')) state.ant.ops = [...h.op].map((c) => c === '1');
-  if (ANT.TECH[h.t]) state.ant.tech = h.t;
-  if (ANT.TYPE_GROUPS[h.ty]) state.ant.type = h.ty;
+  if (Object.hasOwn(ANT.TECH, h.t ?? '')) state.ant.tech = h.t;
+  if (Object.hasOwn(ANT.TYPE_GROUPS, h.ty ?? '')) state.ant.type = h.ty;
   if (['cell', 'radius', 'view'].includes(h.sc)) state.scope = h.sc;
   else if ('site' in h) state.scope = 'radius'; // a site opens on its radius summary
   if ([0.5, 1, 2, 5, 10, 20].includes(+h.r)) state.radiusKm = +h.r;
 }
-function writeHash() {
+function hashFor() {
   const keep = location.hash.slice(1).split('&').filter((p) => p && !HASH_KEYS.includes(p.split('=')[0]));
   const add = [], a = state.ant, d = DEFAULTS;
   if (state.metric !== d.metric) add.push(`m=${state.metric}`);
@@ -168,10 +173,22 @@ function writeHash() {
     add.push(`sel=${cellE(state.selected)},${cellN(state.selected)}`);
     if (state.scope !== 'cell') add.push(`sc=${state.scope}`);
     if (state.scope === 'radius') add.push(`r=${state.radiusKm}`);
+  } else if (state.scope === 'view' && N && !$('detail').hidden) {
+    add.push('sc=view'); // the "In view" summary, which needs no selection
   }
-  const next = `#${[...keep, ...add].join('&')}`;
+  return `#${[...keep, ...add].join('&')}`;
+}
+function writeHash() {
+  const next = hashFor();
   if (next !== (location.hash || '#')) history.replaceState(history.state, '', next);
 }
+// A link pasted into an open tab only changes the hash: MapLibre moves the camera, but the metric,
+// filters and selection would stay as they were. Reopen the page so that the link applies in full.
+// (MapLibre and writeHash() use replaceState, which fires no hashchange.)
+addEventListener('hashchange', () => {
+  if (HASH_KEYS.some((k) => k in hashParams()) && location.hash !== hashFor()) location.reload();
+  else writeHash(); // a plain map= link keeps the visitor's own settings, as on load
+});
 
 // ---------------------------------------------------------------- data
 let META, N, M, E_IDX, N_IDX, POS, CENTER, BBOX, BBOX_LL, NOLOC_IDX;
@@ -461,10 +478,11 @@ const METRICS = [
   { id: 'raw', group: 'All attributes', label: 'Any of the 77 attributes…', kind: 'raw' },
 ];
 const METRIC = Object.fromEntries(METRICS.map((m) => [m.id, m]));
+const metricDef = () => (Object.hasOwn(METRIC, state.metric) ? METRIC[state.metric] : METRIC.pop);
 
 // Resolve the raw attribute pseudo-metric to a concrete definition.
 function activeMetric() {
-  const m = METRIC[state.metric] || METRIC.pop;
+  const m = metricDef();
   if (m.kind !== 'raw') return m;
   const c = state.rawCol, label = META.labels[c];
   if (c === 'HPI') return { id: 'raw:HPI', label, kind: 'class', desc: `${label} (FSO code HPI).`, src: count('HPI') };
@@ -637,7 +655,8 @@ function classify() {
 // Colours for the other zoom levels in idle time, so crossing a level while zooming does not stall.
 function prewarm() {
   const version = colorVersion, todo = LEVELS.filter((s) => !colorCache.has(s));
-  const idle = self.requestIdleCallback ?? ((f) => setTimeout(() => f({ timeRemaining: () => 8 }), 50));
+  const idle = self.requestIdleCallback // not in Safari: a 12 ms slice every 50 ms instead
+    ?? ((f) => setTimeout(() => { const end = performance.now() + 12; f({ timeRemaining: () => end - performance.now() }); }, 50));
   const step = (deadline) => {
     while (todo.length && version === colorVersion && deadline.timeRemaining() > 6) colorsFor(gridFor(todo.shift()));
     if (todo.length && version === colorVersion) idle(step);
@@ -679,23 +698,25 @@ function paint() {
 let SMOOTH = null; // { key, surface, rgba, tiles, value(p), alpha(p) }
 let SURF = null;   // { key, s }: blurred layers, which depend only on the metric and sigma (the slow part)
 let smoothVersion = 0;
-// The blur runs in a worker when possible; until it answers, the map shows the hectares.
-let smoothWorker = null, workerJob = 0, workerKey = null;
+// The blur runs in a worker when possible; until it answers, the map shows the hectares. One job at a
+// time: settings changed meanwhile (say, stepping through metrics) are blurred once it answers.
+let smoothWorker = null, workerJob = 0, workerKey = null; // workerKey: the surface being blurred, if any
 try {
   smoothWorker = new Worker(new URL('smooth-worker.js', import.meta.url), { type: 'module' });
   smoothWorker.onerror = (e) => { console.warn('smoothing worker failed; smoothing on the main thread', e); smoothWorker = null; workerKey = null; paint(); };
   smoothWorker.onmessage = ({ data }) => {
-    if (data.id !== workerJob) return; // a newer request is under way
     const key = workerKey;
     workerKey = null;
     if (!state.smooth) return; // switched off meanwhile: drop the ~150 MB result
-    SURF = { key, s: data.surface };
+    SURF = { key, s: data.surface }; // if the settings changed meanwhile, computeSmooth() drops it and asks again
     paint();
   };
 } catch { /* no module workers: smooth on the main thread */ }
+// Arrays with buffers of their own: posting a view of the downloaded data would copy all of it (~55 MB).
+const ownBuffer = (a) => (a.byteOffset === 0 && a.byteLength === a.buffer.byteLength ? a : a.slice());
 function blurLayers(m) {
   const { num, den } = baseParts(m);
-  const layers = { num, den, sup: inhabitedIndicator() };
+  const layers = { num: ownBuffer(num), den: ownBuffer(den), sup: ownBuffer(inhabitedIndicator()) };
   if (isRate(m)) layers.pop = Float32Array.from(col('BBTOT'));
   return layers;
 }
@@ -709,9 +730,9 @@ function computeSmooth() {
   const surfKey = `${metricKey(m)}|${state.sigma}`;
   if (SURF?.key !== surfKey) {
     SURF = null; // let the old surface go before allocating the new one
-    SMOOTH = null; // never show a surface for other settings meanwhile
+    if (SMOOTH) { SMOOTH = null; smoothVersion++; } // never show a surface for other settings meanwhile (terrain tiles too)
     if (smoothWorker) {
-      if (workerKey !== surfKey) {
+      if (workerKey === null) {
         if (workerJob === 0) { // first job: the hectare centres, once
           const E = new Float64Array(N), Nn = new Float64Array(N);
           for (let i = 0; i < N; i++) { E[i] = cellE(i) + 50; Nn[i] = cellN(i) + 50; }
@@ -1421,7 +1442,7 @@ function buildControls() {
     o.value = m.id;
     og.append(o);
   }
-  if (!METRIC[state.metric] || (state.metric === 'dist' && !A)) state.metric = 'pop';
+  if (!Object.hasOwn(METRIC, state.metric) || (state.metric === 'dist' && !A)) state.metric = 'pop';
   sel.value = state.metric;
   sel.addEventListener('change', () => { state.metric = sel.value; state.isolate = null; syncControls(); refresh(); });
 
@@ -1595,7 +1616,7 @@ function withBusy(fn) {
 }
 
 function syncControls() {
-  const m = METRIC[state.metric];
+  const m = metricDef();
   $('raw-opts').hidden = m.kind !== 'raw';
   const setSeg = (attr, v) => document.querySelectorAll(`[${attr}]`).forEach((b) =>
     b.setAttribute('aria-checked', String(b.getAttribute(attr) === v)));
@@ -1640,7 +1661,11 @@ function viewTest() {
   const inBox = (x, y) => x >= w && x <= e && y >= s && y <= n;
   if (!map.getPitch() && !map.getBearing()) return inBox;
   const { width, height } = map.getCanvas().getBoundingClientRect();
-  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = [[0, 0], [width, 0], [width, height], [0, height]]
+  // Tilted beyond about 71° (terrain allows 80°), the top of the screen is sky, where unproject() returns
+  // points behind the camera and the quadrilateral turns inside out: start it 2° below the horizon.
+  const half = height / 2, focal = half / Math.tan((map.getVerticalFieldOfView() * Math.PI) / 360);
+  const top = Math.max(0, half - focal * Math.tan((Math.max(1, 88 - map.getPitch()) * Math.PI) / 180));
+  const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = [[0, top], [width, top], [width, height], [0, height]]
     .map((pt) => map.unproject(pt)).map((ll) => [ll.lng, ll.lat]);
   const sg = Math.sign((x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)); // corner order: clockwise or not
   // Plain arithmetic: this runs for every hectare on each map move.
@@ -1798,6 +1823,7 @@ function openDetail(pan = true) {
   render();
   makeRoomFor('detail', pan);
   takeFocus('detail');
+  writeHash();
 }
 function closeDetail() {
   giveBackFocus('detail');
@@ -2116,6 +2142,7 @@ function openAnalysis() {
   render();
   makeRoomFor('analysis');
   takeFocus('analysis');
+  writeHash(); // the selection is gone
 }
 function closeAnalysis() {
   giveBackFocus('analysis');
@@ -2319,8 +2346,8 @@ function setupSearch() {
   lastLevel = levelForZoom(map.getZoom());
   classify();
   renderAntLegend();
-  const site = /^(\d+),(\d+)$/.exec(hashParams().site ?? ''); // a shared link with a selected antenna site
-  const sel = /^(\d+),(\d+)$/.exec(hashParams().sel ?? ''); // ... or hectare
+  const site = /^(\d+),(\d+)$/.exec(BOOT_HASH.site ?? ''); // a shared link with a selected antenna site
+  const sel = /^(\d+),(\d+)$/.exec(BOOT_HASH.sel ?? ''); // ... or hectare
   const siteIdx = site && A ? A.e.findIndex((e, k) => e === +site[1] && A.N[k] === +site[2]) : -1;
   if (siteIdx >= 0) {
     const scope = state.scope;
@@ -2329,6 +2356,8 @@ function setupSearch() {
   } else if (sel) {
     const i = cellAt(+sel[1] + 50, +sel[2] + 50), scope = state.scope;
     if (i >= 0) { selectCell(i); if (state.scope !== scope) { state.scope = scope; syncControls(); renderDetail(); render(); } }
+  } else if (BOOT_HASH.sc === 'view') {
+    openDetail(false);
   }
   writeHash();
   if (state.view === '3d' && map.getPitch() === 0) map.easeTo({ pitch: 55, duration: 0 });
