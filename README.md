@@ -1,6 +1,8 @@
 # Intro
 This repo visualizes the Swiss population grid: an interactive web map of the permanent resident population per hectare (100 × 100 m), from the Federal Statistical Office's STATPOP 2024 geodata (reference date 31 Dec 2024). The map also shows OFCOM's mobile antenna sites, so you can see how antenna locations relate to where people live.
 
+Live: **https://arman-maghsoudnia.github.io/swiss-atlas/**
+
 # Data sources and terms of use
 
 The repo ships only the data derived for the map (`web/data/`). The raw source files are not committed; download them as shown below if you want to rebuild `web/data`. The derived files remain subject to the terms of their sources, and the source must be cited wherever the data or the map is shown (the map does this in its attribution line).
@@ -96,3 +98,15 @@ web/vendor/                pinned third-party libraries (see its README)
 web/style.css              styles (light/dark follow the OS setting)
 deploy/                    nginx + password login for a server deployment (install.sh, login.html, nginx-locations.conf)
 ```
+
+# License
+
+Copyright (C) 2026 Arman Maghsoudnia.
+
+The code in this repository is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). You may use, modify and share it, but if you distribute a modified version or run one as a website or other network service, you must make its complete source code available to its users under the same license.
+
+Not covered by this license:
+- `web/vendor/`: third-party libraries under their own licenses (MIT, BSD-3-Clause, Apache-2.0), see [web/vendor/README.md](web/vendor/README.md).
+- `web/data/`: derived from FSO and OFCOM data, which remain under their terms of use (see *Data sources and terms of use* above).
+
+For use without the AGPL obligations, for example in a closed-source or commercial product, commercial licenses are available on request from [Arman Maghsoudnia](https://github.com/arman-maghsoudnia).
