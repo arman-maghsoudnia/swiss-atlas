@@ -350,6 +350,7 @@ export default {
   "Federal Office of Communications OFCOM": "Bundesamt für Kommunikation BAKOM",
   ", as supplied by the operators, accuracy not guaranteed.": ", gemäss Angaben der Betreiber, ohne Gewähr für die Genauigkeit.",
   "Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.": "Aus Datenschutzgründen werden Werte von 1–3 als 3 veröffentlicht; Summen liegen daher leicht über den offiziellen Totalen.",
+  "Privacy: no cookies or tracking; your settings stay in your browser. As with any website, the host of this page and swisstopo (maps, search) receive your IP address.": "Datenschutz: keine Cookies, kein Tracking; Ihre Einstellungen bleiben in Ihrem Browser. Wie bei jeder Website erhalten der Host dieser Seite und swisstopo (Karten, Suche) Ihre IP-Adresse.",
   "Source code": "Quellcode",
   "Selection details": "Details zur Auswahl",
   "Close (Esc)": "Schliessen (Esc)",

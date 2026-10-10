@@ -350,6 +350,7 @@ export default {
   "Federal Office of Communications OFCOM": "Ufficio federale delle comunicazioni UFCOM",
   ", as supplied by the operators, accuracy not guaranteed.": ", secondo le indicazioni degli operatori, senza garanzia di esattezza.",
   "Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.": "Per la protezione dei dati, i valori da 1 a 3 sono pubblicati come 3; le somme superano quindi leggermente i totali ufficiali.",
+  "Privacy: no cookies or tracking; your settings stay in your browser. As with any website, the host of this page and swisstopo (maps, search) receive your IP address.": "Protezione dei dati: nessun cookie né tracciamento; le tue impostazioni restano nel browser. Come per ogni sito web, il servizio che ospita questa pagina e swisstopo (carte, ricerca) ricevono il tuo indirizzo IP.",
   "Source code": "Codice sorgente",
   "Selection details": "Dettagli della selezione",
   "Close (Esc)": "Chiudi (Esc)",

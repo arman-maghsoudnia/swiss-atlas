@@ -4,9 +4,9 @@
 
 An interactive map of Switzerland at hectare resolution (100 × 100 m). It shows where people live, from the Federal Statistical Office's STATPOP 2024 data (31 Dec 2024), and where the mobile antenna sites are, from OFCOM, on swisstopo basemaps.
 
-**Live map:** https://arman-maghsoudnia.github.io/swiss-atlas/
+**Live map:** https://atlas.armanma.ch/
 
-[![Map of Switzerland coloured by residents per hectare, with mobile antenna sites](web/preview.jpg)](https://arman-maghsoudnia.github.io/swiss-atlas/)
+[![Map of Switzerland coloured by residents per hectare, with mobile antenna sites](web/preview.jpg)](https://atlas.armanma.ch/)
 
 # What's in the map
 
@@ -54,6 +54,10 @@ The repo includes only the data derived for the map (`web/data/`). To rebuild it
 
 After downloading, run `python3 serve.py --rebuild`. Without `--rebuild`, `serve.py` only rebuilds when a source is newer than `web/data`, and `unzip` keeps the archive's 2025 file dates.
 
+# Privacy
+
+The page sets no cookies and has no analytics or tracking. Settings (and the chosen language) are kept in the browser's local storage, and the view in the URL. As with any website, the server hosting the page (GitHub Pages, or your own nginx) receives visitors' IP addresses, and so does swisstopo, from which the browser loads the maps, terrain and search results directly (on the nginx deployment, through its caching proxy instead).
+
 # Run it
 
 ```sh
@@ -79,7 +83,7 @@ No dependencies are needed. Set `SPG_SKIP_SLOW=1` to skip the full data rebuild,
 
 # Hosting on GitHub Pages
 
-`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow. Each deploy also converts OFCOM's current antenna file, and a weekly run (Mondays) picks up their updates. If that fails, the committed `web/data/antennas.json` is published instead. The panel shows the date of the antenna data.
+`.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`. The site's address is https://atlas.armanma.ch/, a DNS CNAME to `arman-maghsoudnia.github.io` set as the Pages custom domain; the github.io address redirects there. It is skipped while the repository is private, because a Pages site is always public. Enable it once under *Settings → Pages → Source: GitHub Actions*. The Pages site has no password and no caching proxy, so browsers load swisstopo's maps directly, as swisstopo's terms allow. Each deploy also converts OFCOM's current antenna file, and a weekly run (Mondays) picks up their updates. If that fails, the committed `web/data/antennas.json` is published instead. The panel shows the date of the antenna data.
 
 # Deployment (nginx)
 

@@ -350,6 +350,7 @@ export default {
   "Federal Office of Communications OFCOM": "Office fédéral de la communication OFCOM",
   ", as supplied by the operators, accuracy not guaranteed.": ", selon les indications des opérateurs, sans garantie d’exactitude.",
   "Counts of 1–3 are published as 3 for data protection, so sums slightly exceed official totals.": "Pour la protection des données, les valeurs de 1 à 3 sont remplacées par 3. Les sommes dépassent donc légèrement les totaux officiels.",
+  "Privacy: no cookies or tracking; your settings stay in your browser. As with any website, the host of this page and swisstopo (maps, search) receive your IP address.": "Protection des données\u00a0: ni cookies ni suivi, vos réglages restent dans votre navigateur. Comme pour tout site web, l’hébergeur de cette page et swisstopo (cartes, recherche) reçoivent votre adresse IP.",
   "Source code": "Code source",
   "Selection details": "Détails de la sélection",
   "Close (Esc)": "Fermer (Échap)",
