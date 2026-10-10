@@ -289,6 +289,7 @@ export default {
   "Share this view (link with the current map and settings)": "Diese Ansicht teilen (Link mit der aktuellen Karte und den Einstellungen)",
   "Save the map as an image": "Karte als Bild speichern",
   "Save the map as an image (PNG, with legend and sources)": "Karte als Bild speichern (PNG, mit Legende und Quellen)",
+  "Source code on GitHub": "Quellcode auf GitHub",
   "Find a place, postcode or address": "Ort, PLZ oder Adresse suchen",
   "Search places": "Orte suchen",
   "Search results": "Suchergebnisse",
