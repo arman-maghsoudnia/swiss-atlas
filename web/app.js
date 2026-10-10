@@ -90,14 +90,17 @@ function styleFor(key) {
 // ---------------------------------------------------------------- state
 const SIGMAS = [100, 200, 300, 500, 1000, 2000, 5000]; // smoothing kernel sigma, metres
 const DEFAULTS = {
-  metric: 'pop', rawCol: 'BB12', rawMode: 'share', minPop: 10, excludeNoloc: false,
-  view: '2d', heightScale: 3, opacity: 0.85, dim: 0.45, basemap: 'imagery', scope: 'cell', radiusKm: 2,
+  metric: 'pop', rawCol: 'BB12', rawMode: 'share', minPop: 1, excludeNoloc: false,
+  view: '2d', heightScale: 3, opacity: 0.85, dim: 0.1, basemap: 'imagery', scope: 'cell', radiusKm: 2,
   smooth: false, sigma: 300, analysisScale: 1000, exaggeration: 1.5,
   ant: { show: true, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
 };
 const SCOPES = ['cell', 'radius', 'commune', 'view']; // the details' Summarise options
 const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'site', 'sc', 'r']; // see writeHash()
+const SETTINGS_VERSION = 2; // 2: basemap dimming 0.1 by default (was 0.45, stored by everyone who visited)
 const saved = loadSettings();
+delete saved.minPop; // every visit starts with all hectares shown; a link keeps its minimum (mp=)
+if (saved.v !== SETTINGS_VERSION) delete saved.dim;
 const state = {
   ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ops: [...DEFAULTS.ant.ops], ...(saved.ant || {}) },
   isolate: null, selected: -1, antenna: -1, hoverBlock: null, beforeId: undefined,
@@ -118,9 +121,10 @@ function loadSettings() {
   try { return JSON.parse(localStorage.getItem('spg-settings') || '{}'); } catch { return {}; }
 }
 function saveSettings() {
-  const keep = ['metric', 'rawCol', 'rawMode', 'minPop', 'excludeNoloc', 'view', 'heightScale', 'opacity', 'dim', 'basemap',
+  const keep = ['metric', 'rawCol', 'rawMode', 'excludeNoloc', 'view', 'heightScale', 'opacity', 'dim', 'basemap',
     'scope', 'radiusKm', 'smooth', 'sigma', 'analysisScale', 'ant', 'exaggeration'];
-  try { localStorage.setItem('spg-settings', JSON.stringify(Object.fromEntries(keep.map((k) => [k, state[k]])))); } catch { /* private mode */ }
+  const settings = { v: SETTINGS_VERSION, ...Object.fromEntries(keep.map((k) => [k, state[k]])) };
+  try { localStorage.setItem('spg-settings', JSON.stringify(settings)); } catch { /* private mode */ }
   writeHash();
 }
 
@@ -517,7 +521,8 @@ function metricValues(m, g) {
   if (valueCache.size > 30) valueCache.delete(valueCache.keys().next().value); // ~1.4 MB per 100 m entry
   return v;
 }
-const isRate = (m) => (m.kind === 'share' || m.kind === 'value' || m.kind === 'diverging') && !m.noMinPop;
+// The minimum residents per hectare greys out every metric's small hectares (the distance metric is per resident).
+const gated = (m) => !m.noMinPop;
 
 function niceRound(x) { // 1, 2, 2.5, 5 × 10^k
   if (x <= 0) return 0;
@@ -612,8 +617,8 @@ let GRID = null;     // grid currently drawn (100 m hectares or an aggregate lev
 
 const classOf = (v, breaks) => { let k = 0; while (k < breaks.length && v >= breaks[k]) k++; return k; };
 function validator(m, g) {
-  const values = metricValues(m, g), pop = g.col('BBTOT'), rate = isRate(m);
-  return { values, pop, rate, valid: (i) => pop[i] > 0 && !Number.isNaN(values[i]) && (!rate || pop[i] >= state.minPop) };
+  const values = metricValues(m, g), pop = g.col('BBTOT'), gate = gated(m);
+  return { values, pop, gate, valid: (i) => pop[i] > 0 && !Number.isNaN(values[i]) && (!gate || pop[i] >= state.minPop) };
 }
 
 // Per-grid colours (and 3D heights) for the current classes. Cached per grid size, so the deck.gl
@@ -652,7 +657,7 @@ function classify() {
   bumpColors();
   const m = activeMetric();
   const g = gridFor(100);
-  const { values, pop, rate, valid } = validator(m, g);
+  const { values, pop, gate, valid } = validator(m, g);
   const { breaks, zeroClass } = computeBreaks(m, values, valid);
   const nClasses = breaks.length + 1;
   const counts = new Array(nClasses).fill(0);
@@ -664,7 +669,7 @@ function classify() {
   const ramp = rampFor(m, nClasses).map(hexRgb);
   const labels = classLabels(m, breaks, zeroClass);
   if (CLASSES && labels.join('|') !== CLASSES.labels.join('|')) state.isolate = null; // other classes now
-  CLASSES = { m, breaks, labels, ramp, counts, naCount, rate };
+  CLASSES = { m, breaks, labels, ramp, counts, naCount, gate };
   renderLegend();
   paint();
   prewarm();
@@ -735,7 +740,7 @@ const ownBuffer = (a) => (a.byteOffset === 0 && a.byteLength === a.buffer.byteLe
 function blurLayers(m) {
   const { num, den } = baseParts(m);
   const layers = { num: ownBuffer(num), den: ownBuffer(den), sup: ownBuffer(inhabitedIndicator()) };
-  if (isRate(m)) layers.pop = Float32Array.from(col('BBTOT'));
+  if (gated(m)) layers.pop = Float32Array.from(col('BBTOT'));
   return layers;
 }
 function computeSmooth() {
@@ -744,7 +749,7 @@ function computeSmooth() {
   if (SMOOTH?.key === key) return SMOOTH;
   if (m.kind === 'class') { SMOOTH = { key, tiles: [], value: () => NaN, alpha: () => 0 }; return SMOOTH; }
   const t0 = performance.now();
-  const rate = isRate(m);
+  const gate = gated(m) && state.minPop > 1;
   const surfKey = `${metricKey(m)}|${state.sigma}`;
   if (SURF?.key !== surfKey) {
     SURF = null; // let the old surface go before allocating the new one
@@ -771,7 +776,7 @@ function computeSmooth() {
   const value = (p) => (s.den[p] > 1e-9 ? (clamp ? Math.min(1, s.num[p] / s.den[p]) : s.num[p] / s.den[p]) : NaN);
   const alpha = (p) => {
     let a = Math.min(1, s.sup[p] / perCell / 0.12) ** 0.8;   // fade where few hectares are inhabited
-    if (rate) a *= Math.min(1, (s.pop[p] * kernelCells) / Math.max(1, state.minPop));
+    if (gate) a *= Math.min(1, (s.pop[p] * kernelCells) / state.minPop);
     return a;
   };
   const rgba = colorize(s, value, alpha, makeColorScale(breaks, ramp));
@@ -1053,16 +1058,17 @@ function antennaSummary(i) {
 
 // Tooltip for block/hectare i of grid g (shared by the flat deck.gl view and the terrain view).
 function cellTip(g, i, x, y) {
-  const { m, rate } = CLASSES;
+  const { m, gate } = CLASSES;
   const raw = metricValues(m, g)[i];
   const v = m.kind === 'count' && Number.isNaN(raw) ? 0 : raw; // counts are NaN where the count is 0
   const pop = g.col('BBTOT')[i];
   const isHa = g.s === 100;
   showTip(x, y, (box) => {
-    const hidden = rate && pop < state.minPop;
-    if (m.kind === 'count') {
+    const hidden = gate && pop < state.minPop; // greyed out on the map
+    if (m.kind === 'count') { // the count itself, greyed or not
       box.append(el('div', 'tv', isHa ? fmtCount(v, true) : fmtFixed(v, v < 10 ? 1 : 0)));
       box.append(el('div', 'tl', isHa ? m.what : t('{what} (average per inhabited hectare)', { what: m.what })));
+      if (hidden && m.id === 'pop' && isHa) box.append(el('div', 'tl', t('Below the minimum of {n} residents', { n: state.minPop })));
     } else {
       box.append(el('div', 'tv', hidden ? t('Too few residents') : fmtValue(m, v)));
       box.append(el('div', 'tl', m.label));
@@ -1385,7 +1391,7 @@ function setView(v) {
 
 // ---------------------------------------------------------------- legend & controls
 function renderLegend() {
-  const { m, labels, ramp, counts, naCount, rate } = CLASSES;
+  const { m, labels, ramp, counts, naCount } = CLASSES;
   const box = $('legend');
   box.replaceChildren();
   if (state.smooth) {
@@ -1425,8 +1431,9 @@ function renderLegend() {
 }
 // The grey "no value" class, in the legend and under a saved image.
 function naLabel() {
-  const { m, rate } = CLASSES;
-  return rate ? tp(state.minPop, 'Under {n} resident or no value', 'Under {n} residents or no value') : m.kind === 'count' ? '0' : t('No value');
+  const { m, gate } = CLASSES;
+  if (gate && state.minPop > 1) return tp(state.minPop, 'Under {n} resident or no value', 'Under {n} residents or no value');
+  return m.kind === 'count' ? '0' : t('No value');
 }
 
 function shapeSvg(shape, color) {
@@ -1524,7 +1531,7 @@ function buildControls() {
   const minpop = $('minpop');
   minpop.value = state.minPop;
   let raf = 0;
-  const minPopChanged = () => { if (isRate(activeMetric())) { state.isolate = null; refresh(); } else saveSettings(); };
+  const minPopChanged = () => { if (gated(activeMetric())) { state.isolate = null; refresh(); } else writeHash(); };
   minpop.addEventListener('input', () => {
     state.minPop = +minpop.value;
     syncControls();

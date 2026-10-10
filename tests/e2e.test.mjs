@@ -147,6 +147,13 @@ describe('browser smoke test', { skip, timeout: 480_000 }, () => {
     assert.ok(await page.waitFor(`!document.getElementById('loading') && document.getElementById('kpi-ant').textContent !== '–'`, 90_000), 'loads');
     const ev = page.ev;
     assert.equal(await ev(`document.getElementById('metric').value`), 'pop');
+    // the minimum residents per hectare: 1 on landing, and it greys out counts too, while dragging
+    assert.equal(await ev(`document.getElementById('minpop').value`), '1');
+    await ev(`(() => { const m = document.getElementById('minpop'); m.value = 77; m.dispatchEvent(new Event('input')); })()`);
+    assert.ok(await page.waitFor(`[...document.querySelectorAll('#legend .legend-row')].at(-1).textContent.startsWith('Under 77 residents')`, 20_000), 'greyed out');
+    assert.match(await ev(`location.hash`), /mp=77/);
+    await ev(`(() => { const m = document.getElementById('minpop'); m.value = 1; m.dispatchEvent(new Event('input')); })()`);
+    assert.ok(await page.waitFor(`!location.hash.includes('mp=')`, 20_000), 'back to 1');
     await ev(`document.querySelector('#ant-ops input').click()`);
     assert.match(await ev(`location.hash`), /op=0/);
     await ev(`document.querySelector('#ant-ops input').click()`);
