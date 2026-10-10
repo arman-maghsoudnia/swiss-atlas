@@ -290,6 +290,8 @@ export default {
   "Save the map as an image": "Enregistrer la carte en image",
   "Save the map as an image (PNG, with legend and sources)": "Enregistrer la carte en image (PNG, avec légende et sources)",
   "Source code on GitHub": "Code source sur GitHub",
+  "Support": "Soutenir",
+  "Support Swiss atlas on Ko-fi": "Soutenir Swiss atlas sur Ko-fi",
   "Find a place, postcode or address": "Chercher un lieu, un NPA ou une adresse",
   "Search places": "Rechercher des lieux",
   "Search results": "Résultats de la recherche",

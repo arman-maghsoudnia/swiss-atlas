@@ -326,20 +326,22 @@ svg.pyr .hit:hover { fill: var(--wash); }
 }
 /* Keep the zoom buttons clear of an open details/analysis panel. */
 body.side-open .maplibregl-ctrl-bottom-right { right: 404px; }
-/* Link to the code on GitHub: a small pill in the top-right corner, left of an open details/analysis
-   panel. Where it would not fit (phones, narrow windows with a panel open), an icon in the panel header. */
-.source-link {
-  position: absolute; top: 12px; right: 12px; z-index: 2;
+/* Support (Ko-fi) and source code (GitHub): small pills in the top-right corner, left of an open
+   details/analysis panel. Where they would not fit (phones, narrow windows with a panel open), icons in
+   the panel header instead. */
+.top-links { position: absolute; top: 12px; right: 12px; z-index: 2; display: flex; gap: 6px; }
+.pill {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px 5px 9px; border-radius: 9px;
   color: var(--text-secondary); font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap;
 }
-.source-link:hover { color: var(--text-primary); }
-body.side-open .source-link { right: 404px; }
-.head-src { display: none; }
+.pill:hover { color: var(--text-primary); }
+.heart { color: #e5484d; }
+body.side-open .top-links { right: 404px; }
+.head-link { display: none; }
 a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-@media (max-width: 920px) {
-  body.side-open .source-link { display: none; }
-  body.side-open .head-src { display: grid; }
+@media (max-width: 1000px) {
+  body.side-open .top-links { display: none; }
+  body.side-open .head-link { display: grid; }
 }
 
 .sr-only {
@@ -358,8 +360,8 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   body.side-open .maplibregl-ctrl-bottom-right { right: 0; }
   body.side-open .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group { display: none; }
   #panel { left: 8px; right: 8px; top: 8px; width: auto; max-height: 55%; }
-  .source-link { display: none; }
-  .head-src { display: grid; }
+  .top-links { display: none; }
+  .head-link { display: grid; }
   #detail, #analysis {
     left: 8px; right: 8px; top: auto; bottom: 28px; width: auto; max-height: 50%;
   }
