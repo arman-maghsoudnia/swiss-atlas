@@ -93,14 +93,17 @@ const DEFAULTS = {
   metric: 'pop', rawCol: 'BB12', rawMode: 'share', minPop: 1, excludeNoloc: false,
   view: '2d', heightScale: 3, opacity: 0.85, dim: 0.1, basemap: 'imagery', scope: 'cell', radiusKm: 2,
   smooth: false, sigma: 300, analysisScale: 1000, exaggeration: 1.5,
-  ant: { show: true, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
+  ant: { show: false, ops: [true, true, true, false, false], tech: '', type: '', color: 'single', sizeByPower: true },
 };
 const SCOPES = ['cell', 'radius', 'commune', 'view']; // the details' Summarise options
 const HASH_KEYS = ['m', 'a', 'as', 'mp', 'x', 'v', 's', 'b', 'an', 'op', 't', 'ty', 'sel', 'site', 'sc', 'r']; // see writeHash()
-const SETTINGS_VERSION = 2; // 2: basemap dimming 0.1 by default (was 0.45, stored by everyone who visited)
+// Settings stored before a default changed drop that setting once, so returning visitors get the new default:
+// 2: basemap dimming 0.1 (was 0.45); 3: antenna sites hidden on landing (were shown).
+const SETTINGS_VERSION = 3;
 const saved = loadSettings();
 delete saved.minPop; // every visit starts with all hectares shown; a link keeps its minimum (mp=)
-if (saved.v !== SETTINGS_VERSION) delete saved.dim;
+if (!(saved.v >= 2)) delete saved.dim;
+if (!(saved.v >= 3) && saved.ant) delete saved.ant.show;
 const state = {
   ...DEFAULTS, ...saved, ant: { ...DEFAULTS.ant, ops: [...DEFAULTS.ant.ops], ...(saved.ant || {}) },
   isolate: null, selected: -1, antenna: -1, hoverBlock: null, beforeId: undefined,
@@ -151,7 +154,9 @@ function stateFromHash(h) {
   if (h.v) state.view = h.v;
   if (h.s) { state.smooth = true; state.sigma = +h.s; }
   if (h.b) state.basemap = h.b;
-  if (h.an === '0') state.ant.show = false;
+  // an=1 shows the antenna sites (hidden by default). Links from before October 2026 have no an= when they
+  // showed them; those that set antenna filters or select a site still open with the sites shown.
+  if (h.an === '1' || (!('an' in h) && ['op', 't', 'ty', 'site'].some((k) => k in h))) state.ant.show = true;
   if (/^[01]{5}$/.test(h.op ?? '')) state.ant.ops = [...h.op].map((c) => c === '1');
   if (Object.hasOwn(ANT.TECH, h.t ?? '')) state.ant.tech = h.t;
   if (Object.hasOwn(ANT.TYPE_GROUPS, h.ty ?? '')) state.ant.type = h.ty;
@@ -169,11 +174,11 @@ function hashFor() {
   if (state.view !== d.view) add.push(`v=${state.view}`);
   if (state.smooth) add.push(`s=${state.sigma}`);
   if (state.basemap !== d.basemap) add.push(`b=${state.basemap}`);
-  if (!a.show) add.push('an=0');
   const ops = a.ops.map((o) => (o ? 1 : 0)).join('');
-  if (ops !== d.ant.ops.map((o) => (o ? 1 : 0)).join('')) add.push(`op=${ops}`);
-  if (a.tech) add.push(`t=${a.tech}`);
-  if (a.type) add.push(`ty=${a.type}`);
+  const filters = [ops !== d.ant.ops.map((o) => (o ? 1 : 0)).join('') && `op=${ops}`, a.tech && `t=${a.tech}`, a.type && `ty=${a.type}`].filter(Boolean);
+  if (a.show) add.push('an=1');
+  else if (filters.length) add.push('an=0'); // filters alone would mean "shown" (see stateFromHash)
+  add.push(...filters);
   if (state.antenna >= 0 && !$('detail').hidden) {
     add.push(`site=${A.e[state.antenna]},${A.N[state.antenna]}`);
     if (state.scope !== 'radius') add.push(`sc=${state.scope}`);

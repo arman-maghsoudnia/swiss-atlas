@@ -84,6 +84,12 @@ describe('browser smoke test', { skip, timeout: 480_000 }, () => {
     await ev(`(() => { const s = document.getElementById('raw-col'); s.value = 'HPTOT'; s.dispatchEvent(new Event('change')); })()`);
     assert.ok(await ev(`document.getElementById('legend').textContent.includes('Under')`));
 
+    // antenna sites: hidden on landing, shown with the checkbox (the link then says so)
+    assert.equal(await ev(`document.getElementById('ant-show').checked`), false);
+    assert.equal(await ev(`document.getElementById('kpi-ant').textContent`), '–');
+    await ev(`document.getElementById('ant-show').click()`);
+    assert.ok(await page.waitFor(`document.getElementById('kpi-ant').textContent !== '–' && location.hash.includes('an=1')`, 5000), 'sites shown');
+
     // antenna filters and the distance metric: none matching, then back
     await ev(`(() => { const s = document.getElementById('metric'); s.value = 'dist'; s.dispatchEvent(new Event('change')); })()`);
     await ev(`[...document.querySelectorAll('#ant-ops input')].forEach((c) => { if (c.checked) c.click(); })`);
@@ -133,6 +139,7 @@ describe('browser smoke test', { skip, timeout: 480_000 }, () => {
     assert.ok(await page.waitFor(`!document.getElementById('loading') && !document.getElementById('detail').hidden`, 90_000));
     const ev = page.ev;
     assert.equal(await ev(`document.getElementById('metric').value`), 'foreign');
+    assert.equal(await ev(`document.getElementById('ant-show').checked`), false, 'a link without an= or antenna filters: sites hidden');
     assert.equal(await ev(`document.querySelector('[data-view][aria-checked="true"]').dataset.view`), '3d');
     assert.equal(await ev(`document.getElementById('d-title').textContent`), 'Within 5 km');
     await ev(`(() => { const s = document.getElementById('metric'); s.value = 'senior'; s.dispatchEvent(new Event('change')); })()`);
@@ -147,6 +154,7 @@ describe('browser smoke test', { skip, timeout: 480_000 }, () => {
     assert.ok(await page.waitFor(`!document.getElementById('loading') && document.getElementById('kpi-ant').textContent !== '–'`, 90_000), 'loads');
     const ev = page.ev;
     assert.equal(await ev(`document.getElementById('metric').value`), 'pop');
+    assert.equal(await ev(`document.getElementById('ant-show').checked`), true, 'a link with antenna filters (older links had no an=) shows the sites');
     // the minimum residents per hectare: 1 on landing, and it greys out counts too, while dragging
     assert.equal(await ev(`document.getElementById('minpop').value`), '1');
     await ev(`(() => { const m = document.getElementById('minpop'); m.value = 77; m.dispatchEvent(new Event('input')); })()`);
